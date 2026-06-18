@@ -1,28 +1,114 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, router } from "./_core/trpc";
+import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
+import { z } from "zod";
+import {
+  getKpiConfigs,
+  getGeographyHierarchy,
+  getKecamatanList,
+  getFmTrend,
+  getFmByBranch,
+  getMtdTrend,
+  getVlrTrend,
+  getRevSegmentsTrend,
+  getVoucherGameData,
+  getKecRankData,
+  getUploads,
+  getLatestUpload,
+} from "./db";
+
+const FilterInput = z.object({
+  brands: z.array(z.string()).optional(),
+  areas: z.array(z.string()).optional(),
+  salesAreas: z.array(z.string()).optional(),
+  kabkots: z.array(z.string()).optional(),
+  yearMonths: z.array(z.string()).optional(),
+});
 
 export const appRouter = router({
-    // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
   auth: router({
-    me: publicProcedure.query(opts => opts.ctx.user),
+    me: publicProcedure.query((opts) => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
-      return {
-        success: true,
-      } as const;
+      return { success: true } as const;
     }),
   }),
 
-  // TODO: add feature routers here, e.g.
-  // todo: router({
-  //   list: protectedProcedure.query(({ ctx }) =>
-  //     db.getUserTodos(ctx.user.id)
-  //   ),
-  // }),
+  // ─── Upload ──────────────────────────────────────────────────────────────
+  upload: router({
+    list: publicProcedure.query(() => getUploads()),
+    latest: publicProcedure.query(() => getLatestUpload()),
+  }),
+
+  // ─── KPI Config ──────────────────────────────────────────────────────────
+  kpi: router({
+    configs: publicProcedure.query(() => getKpiConfigs()),
+  }),
+
+  // ─── Geography ───────────────────────────────────────────────────────────
+  geo: router({
+    hierarchy: publicProcedure.query(() => getGeographyHierarchy()),
+    kecamatan: publicProcedure
+      .input(z.object({ kabkot: z.string().optional() }))
+      .query(({ input }) => getKecamatanList(input.kabkot)),
+  }),
+
+  // ─── FM Trend (Full Month) ───────────────────────────────────────────────
+  fm: router({
+    trend: publicProcedure.input(FilterInput).query(({ input }) => getFmTrend(input)),
+    byBranch: publicProcedure.input(FilterInput).query(({ input }) => getFmByBranch(input)),
+  }),
+
+  // ─── MTD Trend ───────────────────────────────────────────────────────────
+  mtd: router({
+    trend: publicProcedure.input(FilterInput).query(({ input }) => getMtdTrend(input)),
+  }),
+
+  // ─── VLR ─────────────────────────────────────────────────────────────────
+  vlr: router({
+    trend: publicProcedure
+      .input(
+        z.object({
+          brands: z.array(z.string()).optional(),
+          areas: z.array(z.string()).optional(),
+          kabkots: z.array(z.string()).optional(),
+          tenureGroups: z.array(z.string()).optional(),
+        })
+      )
+      .query(({ input }) => getVlrTrend(input)),
+    kecRank: publicProcedure
+      .input(z.object({ kabkots: z.array(z.string()).optional() }))
+      .query(({ input }) => getKecRankData(input)),
+  }),
+
+  // ─── Revenue Segments ────────────────────────────────────────────────────
+  segments: router({
+    trend: publicProcedure
+      .input(
+        z.object({
+          brands: z.array(z.string()).optional(),
+          areas: z.array(z.string()).optional(),
+          kabkots: z.array(z.string()).optional(),
+          segments: z.array(z.string()).optional(),
+        })
+      )
+      .query(({ input }) => getRevSegmentsTrend(input)),
+  }),
+
+  // ─── Voucher Game ─────────────────────────────────────────────────────────
+  voucherGame: router({
+    data: publicProcedure
+      .input(
+        z.object({
+          brands: z.array(z.string()).optional(),
+          areas: z.array(z.string()).optional(),
+        })
+      )
+      .query(({ input }) => getVoucherGameData(input)),
+  }),
 });
 
 export type AppRouter = typeof appRouter;
