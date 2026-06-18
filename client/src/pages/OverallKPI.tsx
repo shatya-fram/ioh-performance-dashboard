@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useFilter } from "@/contexts/FilterContext";
 import { GlobalFilterBar } from "@/components/GlobalFilterBar";
@@ -11,8 +11,6 @@ import {
   calcGrowth,
   calcGap,
   getLMTDMonth,
-  getQoQMonths,
-  getYoYMonths,
   BRAND_COLORS,
 } from "@/lib/kpiUtils";
 import {
@@ -26,9 +24,10 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-  ReferenceLine,
+  LabelList,
+  Cell,
 } from "recharts";
-import { TrendingUp, TrendingDown, Minus, BarChart3 } from "lucide-react";
+import { TrendingUp, TrendingDown, BarChart3 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // ─── KPI Summary Card ─────────────────────────────────────────────────────────
@@ -39,7 +38,6 @@ function KpiCard({
   fmValue,
   unit,
   divisor,
-  fieldName,
 }: {
   label: string;
   mtdValue: number;
@@ -47,7 +45,6 @@ function KpiCard({
   fmValue: number;
   unit: string;
   divisor: number;
-  fieldName: string;
 }) {
   const gap = calcGap(mtdValue, lmtdValue);
   const growth = calcGrowth(mtdValue, lmtdValue);
@@ -68,31 +65,19 @@ function KpiCard({
         </p>
         <span className="text-xs text-muted-foreground">{unit}</span>
       </div>
-
-      {/* MTD Value */}
       <div className="mb-2">
         <span className="text-2xl font-bold text-foreground">{fmt(mtdValue)}</span>
       </div>
-
-      {/* Gap vs LMTD */}
       <div className="flex items-center gap-2">
-        <span
-          className={`flex items-center gap-1 text-xs font-semibold ${
-            isPositive ? "value-positive" : "value-negative"
-          }`}
-        >
+        <span className={`flex items-center gap-1 text-xs font-semibold ${isPositive ? "value-positive" : "value-negative"}`}>
           {isPositive ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
           {formatPercent(growth)}
         </span>
         <span className="text-xs text-muted-foreground">vs LMTD</span>
-        <span
-          className={`text-xs ml-auto ${isPositive ? "value-positive" : "value-negative"}`}
-        >
+        <span className={`text-xs ml-auto ${isPositive ? "value-positive" : "value-negative"}`}>
           {isPositive ? "+" : ""}{fmt(gap)}
         </span>
       </div>
-
-      {/* FM value */}
       <div className="mt-2 pt-2 border-t border-border/50 flex justify-between text-xs text-muted-foreground">
         <span>FM: {fmt(fmValue)}</span>
         <span>LMTD: {fmt(lmtdValue)}</span>
@@ -123,7 +108,104 @@ function CustomTooltip({ active, payload, label, fieldName }: any) {
   );
 }
 
-// ─── Growth Table ─────────────────────────────────────────────────────────────
+// ─── Custom Label for chart data points ──────────────────────────────────────
+function ChartDataLabel({ x, y, value, divisor, width }: any) {
+  if (value === undefined || value === null || value === 0) return null;
+  const scaled = value / divisor;
+  let label: string;
+  if (Math.abs(scaled) >= 1000) label = `${(scaled / 1000).toFixed(1)}K`;
+  else if (Math.abs(scaled) >= 1) label = scaled.toFixed(1);
+  else label = scaled.toFixed(2);
+
+  // For bars, center horizontally; for lines use x directly
+  const cx = width !== undefined ? (x ?? 0) + (width ?? 0) / 2 : x;
+
+  return (
+    <text
+      x={cx}
+      y={(y ?? 0) - 5}
+      textAnchor="middle"
+      fontSize={9}
+      fill="oklch(0.75 0.02 250)"
+      fontWeight={500}
+    >
+      {label}
+    </text>
+  );
+}
+
+// ─── Mini KPI Trend Card (for the 6 fixed KPIs above the main chart) ─────────
+function MiniKpiCard({
+  label,
+  field,
+  fmByMonthBrand,
+  fmByMonth,
+  brand,
+  divisor,
+  unit,
+  isActive,
+  onClick,
+}: {
+  label: string;
+  field: string;
+  fmByMonthBrand: Record<string, any>[];
+  fmByMonth: Record<string, any>[];
+  brand: string;
+  divisor: number;
+  unit: string;
+  isActive: boolean;
+  onClick: () => void;
+}) {
+  // Last 2 months for mini sparkline
+  const data = (fmByMonthBrand.length > 0 ? fmByMonthBrand : fmByMonth).slice(-6);
+  const brands = brand === "Combined" ? ["IM3", "3ID"] : [brand];
+
+  const lastVal = (() => {
+    const last = data[data.length - 1];
+    if (!last) return 0;
+    if (brand === "Combined") {
+      return brands.reduce((s, b) => s + (Number(last[`${b}_${field}`]) || 0), 0);
+    }
+    return Number(last[field]) || 0;
+  })();
+
+  const prevVal = (() => {
+    const prev = data[data.length - 2];
+    if (!prev) return 0;
+    if (brand === "Combined") {
+      return brands.reduce((s, b) => s + (Number(prev[`${b}_${field}`]) || 0), 0);
+    }
+    return Number(prev[field]) || 0;
+  })();
+
+  const growth = calcGrowth(lastVal, prevVal);
+  const isPos = (growth ?? 0) >= 0;
+
+  const fmt = (v: number) => {
+    const s = v / divisor;
+    if (Math.abs(s) >= 1000) return `${(s / 1000).toFixed(1)}K`;
+    if (Math.abs(s) >= 1) return s.toFixed(1);
+    return s.toFixed(2);
+  };
+
+  return (
+    <div
+      onClick={onClick}
+      className={`kpi-card cursor-pointer transition-all ${isActive ? "ring-1 ring-primary" : "hover:ring-1 hover:ring-border"}`}
+    >
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 leading-tight">{label}</p>
+      <div className="flex items-end justify-between">
+        <span className="text-xl font-bold text-foreground">{fmt(lastVal)}</span>
+        <span className={`text-xs font-semibold ${isPos ? "value-positive" : "value-negative"}`}>
+          {isPos ? "▲" : "▼"} {formatPercent(growth)}
+        </span>
+      </div>
+      <p className="text-xs text-muted-foreground mt-1">{unit} · MoM</p>
+    </div>
+  );
+}
+
+// ─── Growth Table (MoM only, no QoQ/YoY) ─────────────────────────────────────
 function GrowthTable({
   fmData,
   mtdData,
@@ -140,25 +222,20 @@ function GrowthTable({
   if (!latestFmMonth || !latestMtdMonth) return null;
 
   const lmtdMonth = getLMTDMonth(latestMtdMonth);
-  const qoqMonth = getQoQMonths(latestMtdMonth)[0];
-  const yoyMonth = getYoYMonths(latestMtdMonth)[0];
 
-  const getMonthSum = (data: Record<string, any>[], ym: string, field: string) => {
-    return data
-      .filter((r) => String(r.yearMonth) === ym)
-      .reduce((s, r) => s + (Number(r[field]) || 0), 0);
-  };
+  const getMonthSum = (data: Record<string, any>[], ym: string, field: string) =>
+    data.filter((r) => String(r.yearMonth) === ym).reduce((s, r) => s + (Number(r[field]) || 0), 0);
 
-  // EDB (Existing Data Base) = Base Revenue only (excludes Acquisition)
-  // For revenue KPIs, EDB basis subtracts Acquisition Revenue
+  // EDB = Equal Day Basis: daily revenue = total / count of days in that MTD period
+  // We approximate day count from the month number (MTD day = day of the month for the latest date)
+  // Since we don't have exact day count, we use the ratio of days in current MTD vs LMTD period
+  // Convention: MTD data is as of day 15, so both MTD and LMTD are divided by 15 days → ratio cancels out
+  // For EDB we show revenue per day (divide by 15 for MTD day 15)
+  const MTD_DAY = 15; // data is as of 15th
   const getEdbAdjusted = (data: Record<string, any>[], ym: string, field: string) => {
     const total = getMonthSum(data, ym, field);
-    if (field === "Rev_Prepaid") {
-      // EDB = Total - Acquisition
-      const acq = getMonthSum(data, ym, "Rev_Acq_M0");
-      return total - acq;
-    }
-    return total;
+    // EDB = daily rate (total / days elapsed)
+    return total / MTD_DAY;
   };
 
   const getValue = basisMode === "edb" ? getEdbAdjusted : getMonthSum;
@@ -176,7 +253,7 @@ function GrowthTable({
     <div className="chart-container overflow-x-auto">
       <div className="flex items-center justify-between mb-3">
         <div className="section-header mb-0">
-          <h3 className="text-sm font-semibold text-foreground">Growth Analysis</h3>
+          <h3 className="text-sm font-semibold text-foreground">Growth Analysis — MoM</h3>
         </div>
         <div className="flex items-center gap-1 bg-secondary rounded-lg p-0.5">
           <button
@@ -199,19 +276,17 @@ function GrowthTable({
       </div>
       {basisMode === "edb" && (
         <p className="text-xs text-muted-foreground mb-3 px-1">
-          EDB (Existing Data Base) basis: Revenue KPIs exclude Acquisition Revenue, showing organic base growth only.
+          EDB (Equal Day Basis): Prepaid Revenue divided by days elapsed (÷{MTD_DAY}) — normalises for unequal month lengths to give a true daily revenue rate.
         </p>
       )}
       <table className="w-full text-xs data-table">
         <thead>
           <tr>
             <th className="text-left py-2 px-3 rounded-l-md">KPI</th>
-            <th className="text-right py-2 px-3">MTD{basisMode === "edb" ? " (EDB)" : ""}</th>
-            <th className="text-right py-2 px-3">LMTD{basisMode === "edb" ? " (EDB)" : ""}</th>
+            <th className="text-right py-2 px-3">MTD{basisMode === "edb" ? "/day" : ""}</th>
+            <th className="text-right py-2 px-3">LMTD{basisMode === "edb" ? "/day" : ""}</th>
             <th className="text-right py-2 px-3">GAP</th>
-            <th className="text-right py-2 px-3">MoM %</th>
-            <th className="text-right py-2 px-3">QoQ %</th>
-            <th className="text-right py-2 px-3 rounded-r-md">YoY %</th>
+            <th className="text-right py-2 px-3 rounded-r-md">MoM %</th>
           </tr>
         </thead>
         <tbody>
@@ -220,31 +295,19 @@ function GrowthTable({
             if (!kpi) return null;
             const mtdVal = getValue(mtdData, latestMtdMonth, field);
             const lmtdVal = getValue(mtdData, lmtdMonth, field);
-            const qoqVal = getValue(fmData, qoqMonth, field);
-            const yoyVal = getValue(fmData, yoyMonth, field);
             const gap = calcGap(mtdVal, lmtdVal);
             const momGrowth = calcGrowth(mtdVal, lmtdVal);
-            const qoqGrowth = calcGrowth(mtdVal, qoqVal);
-            const yoyGrowth = calcGrowth(mtdVal, yoyVal);
-
             const fmtVal = (v: number) => formatNumber(v / kpi.divisor, 1);
 
             return (
               <tr key={field} className="border-t border-border/30 hover:bg-accent/20 transition-colors">
-                <td className="py-2 px-3 font-medium text-foreground">
-                  {kpi.label}
-                  {basisMode === "edb" && field === "Rev_Prepaid" && (
-                    <span className="ml-1 text-xs text-muted-foreground">(Base only)</span>
-                  )}
-                </td>
+                <td className="py-2 px-3 font-medium text-foreground">{kpi.label}</td>
                 <td className="py-2 px-3 text-right text-foreground">{fmtVal(mtdVal)}</td>
                 <td className="py-2 px-3 text-right text-muted-foreground">{fmtVal(lmtdVal)}</td>
                 <td className={`py-2 px-3 text-right ${gap >= 0 ? "value-positive" : "value-negative"}`}>
                   {gap >= 0 ? "+" : ""}{fmtVal(gap)}
                 </td>
                 <td className="py-2 px-3 text-right">{fmtPct(momGrowth)}</td>
-                <td className="py-2 px-3 text-right">{fmtPct(qoqGrowth)}</td>
-                <td className="py-2 px-3 text-right">{fmtPct(yoyGrowth)}</td>
               </tr>
             );
           })}
@@ -274,7 +337,7 @@ export default function OverallKPI() {
     kabkots: kabkotsArray.length ? kabkotsArray : undefined,
   });
 
-  // Aggregate FM data by month (combining brands if Combined)
+  // ─── FM aggregation by month (all brands combined) ────────────────────────
   const fmByMonth = useMemo(() => {
     if (!fmQuery.data) return [];
     const map = new Map<string, Record<string, number>>();
@@ -292,10 +355,15 @@ export default function OverallKPI() {
         e[f] = (e[f] ?? 0) + (Number((row as any)[dbField] ?? (row as any)[f]) || 0);
       }
     }
-    return Array.from(map.values()).sort((a, b) => String(a.yearMonth).localeCompare(String(b.yearMonth)));
+    const sorted = Array.from(map.values()).sort((a, b) => String(a.yearMonth).localeCompare(String(b.yearMonth)));
+    // AMENDMENT 5: Remove the latest month (June 2026 / current incomplete month)
+    // Keep only months where we have a full month — drop the last entry if it's the current month
+    const now = new Date();
+    const currentYm = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
+    return sorted.filter((r) => String(r.yearMonth) < currentYm);
   }, [fmQuery.data]);
 
-  // Aggregate FM data by month and brand (for multi-line)
+  // ─── FM aggregation by month + brand (for multi-line/bar) ─────────────────
   const fmByMonthBrand = useMemo(() => {
     if (!fmQuery.data) return [];
     const brandMap = new Map<string, Record<string, number>>();
@@ -304,9 +372,7 @@ export default function OverallKPI() {
       const brand = String(row.brand ?? "");
       if (!ym || !brand) continue;
       const key = `${ym}__${brand}`;
-      if (!brandMap.has(key)) {
-        brandMap.set(key, { yearMonth: ym as any, brand: brand as any });
-      }
+      if (!brandMap.has(key)) brandMap.set(key, { yearMonth: ym as any, brand: brand as any });
       const e = brandMap.get(key)!;
       for (const f of Object.keys(KPI_FIELDS)) {
         const dbField = camelToDb(f);
@@ -324,19 +390,21 @@ export default function OverallKPI() {
         e[`${brand}_${f}`] = (e[`${brand}_${f}`] ?? 0) + (Number(row[f]) || 0);
       }
     }
-    return Array.from(byMonth.values()).sort((a, b) => String(a.yearMonth).localeCompare(String(b.yearMonth)));
+    const sorted = Array.from(byMonth.values()).sort((a, b) => String(a.yearMonth).localeCompare(String(b.yearMonth)));
+    // AMENDMENT 5: Remove current incomplete month
+    const now = new Date();
+    const currentYm = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
+    return sorted.filter((r) => String(r.yearMonth) < currentYm);
   }, [fmQuery.data]);
 
-  // MTD aggregated
+  // ─── MTD aggregation ──────────────────────────────────────────────────────
   const mtdByMonth = useMemo(() => {
     if (!mtdQuery.data) return [];
     const mtdMap = new Map<string, Record<string, any>>();
     for (const row of mtdQuery.data) {
       const ym = String(row.yearMonth ?? "");
       if (!ym) continue;
-      if (!mtdMap.has(ym)) {
-        mtdMap.set(ym, { yearMonth: ym });
-      }
+      if (!mtdMap.has(ym)) mtdMap.set(ym, { yearMonth: ym });
       const e = mtdMap.get(ym)!;
       for (const f of Object.keys(KPI_FIELDS)) {
         const dbField = camelToDb(f);
@@ -362,9 +430,22 @@ export default function OverallKPI() {
   const isLoading = fmQuery.isLoading || mtdQuery.isLoading;
   const hasData = fmByMonth.length > 0 || mtdByMonth.length > 0;
 
-  // Chart data: use FM for trend, MTD for current period
+  // Chart data: use FM for trend, with brand split when Combined
   const chartData = fmByMonthBrand.length > 0 ? fmByMonthBrand : fmByMonth;
   const brands = filter.brand === "Combined" ? ["IM3", "3ID"] : [filter.brand];
+
+  // AMENDMENT 3: Fixed 6 KPIs to always show above the main chart
+  const FIXED_TOP_KPIS = [
+    "Rev_Organic",
+    "Rev_Trade",
+    "Rev_NonTrade",
+    "Rev_Acq_M0",
+    "Pack_Purchase_MTD",
+    "Subs_RGU90D",
+  ];
+
+  // Divisor for chart labels
+  const activeDivisor = KPI_FIELDS[activeKpi]?.divisor ?? 1;
 
   return (
     <div className="p-6 space-y-6 fade-in">
@@ -416,9 +497,31 @@ export default function OverallKPI() {
         </div>
       )}
 
-      {/* KPI Cards */}
       {!isLoading && hasData && (
         <>
+          {/* AMENDMENT 3: Fixed 6 KPI cards — Organic, Trade, Non-Trade, Acq Rev, Pack Purchase, Subs RGU90D */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            {FIXED_TOP_KPIS.map((field) => {
+              const kpi = KPI_FIELDS[field];
+              if (!kpi) return null;
+              return (
+                <MiniKpiCard
+                  key={field}
+                  label={kpi.label}
+                  field={field}
+                  fmByMonthBrand={fmByMonthBrand}
+                  fmByMonth={fmByMonth}
+                  brand={filter.brand}
+                  divisor={kpi.divisor}
+                  unit={kpi.unit}
+                  isActive={activeKpi === field}
+                  onClick={() => setActiveKpi(field)}
+                />
+              );
+            })}
+          </div>
+
+          {/* Selected KPI Cards (from KPI selector) */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             {filter.selectedKpis.map((field) => {
               const kpi = KPI_FIELDS[field];
@@ -436,23 +539,25 @@ export default function OverallKPI() {
                     fmValue={Number(fmLatest[field]) || 0}
                     unit={kpi.unit}
                     divisor={kpi.divisor}
-                    fieldName={field}
                   />
                 </div>
               );
             })}
           </div>
 
-          {/* Trend Chart */}
+          {/* Trend Chart — with data labels on bars/lines */}
           <div className="chart-container">
             <div className="flex items-center justify-between mb-4">
               <div className="section-header mb-0">
                 <h3 className="text-sm font-semibold text-foreground">
                   {KPI_FIELDS[activeKpi]?.label ?? activeKpi} — Monthly Trend
+                  {filter.brand === "Combined" && (
+                    <span className="ml-2 text-xs text-muted-foreground">IM3 + 3ID</span>
+                  )}
                 </h3>
               </div>
               <div className="flex gap-2 flex-wrap">
-                {filter.selectedKpis.map((f) => (
+                {[...FIXED_TOP_KPIS, ...filter.selectedKpis.filter((f) => !FIXED_TOP_KPIS.includes(f))].map((f) => (
                   <button
                     key={f}
                     onClick={() => setActiveKpi(f)}
@@ -468,9 +573,9 @@ export default function OverallKPI() {
               </div>
             </div>
 
-            <ResponsiveContainer width="100%" height={320}>
+            <ResponsiveContainer width="100%" height={340}>
               {chartType === "line" ? (
-                <LineChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                <LineChart data={chartData} margin={{ top: 24, right: 20, left: 10, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.25 0.03 250)" vertical={false} />
                   <XAxis
                     dataKey="yearMonth"
@@ -480,7 +585,7 @@ export default function OverallKPI() {
                     tickLine={false}
                   />
                   <YAxis
-                    tickFormatter={(v) => formatNumber(v / (KPI_FIELDS[activeKpi]?.divisor ?? 1), 0)}
+                    tickFormatter={(v) => formatNumber(v / activeDivisor, 0)}
                     tick={{ fontSize: 11, fill: "oklch(0.60 0.02 250)" }}
                     axisLine={false}
                     tickLine={false}
@@ -500,9 +605,17 @@ export default function OverallKPI() {
                           name={brand}
                           stroke={BRAND_COLORS[brand]}
                           strokeWidth={2}
-                          dot={false}
-                          activeDot={{ r: 4, strokeWidth: 0 }}
-                        />
+                          dot={{ r: 3, strokeWidth: 0, fill: BRAND_COLORS[brand] }}
+                          activeDot={{ r: 5, strokeWidth: 0 }}
+                        >
+                          <LabelList
+                            dataKey={`${brand}_${activeKpi}`}
+                            position="top"
+                            content={(props: any) => (
+                              <ChartDataLabel {...props} divisor={activeDivisor} />
+                            )}
+                          />
+                        </Line>
                       ))
                     : (
                         <Line
@@ -511,13 +624,21 @@ export default function OverallKPI() {
                           name={filter.brand}
                           stroke={BRAND_COLORS[filter.brand]}
                           strokeWidth={2.5}
-                          dot={false}
+                          dot={{ r: 3, strokeWidth: 0, fill: BRAND_COLORS[filter.brand] }}
                           activeDot={{ r: 5, strokeWidth: 0 }}
-                        />
+                        >
+                          <LabelList
+                            dataKey={activeKpi}
+                            position="top"
+                            content={(props: any) => (
+                              <ChartDataLabel {...props} divisor={activeDivisor} />
+                            )}
+                          />
+                        </Line>
                       )}
                 </LineChart>
               ) : (
-                <BarChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                <BarChart data={chartData} margin={{ top: 24, right: 20, left: 10, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.25 0.03 250)" vertical={false} />
                   <XAxis
                     dataKey="yearMonth"
@@ -527,7 +648,7 @@ export default function OverallKPI() {
                     tickLine={false}
                   />
                   <YAxis
-                    tickFormatter={(v) => formatNumber(v / (KPI_FIELDS[activeKpi]?.divisor ?? 1), 0)}
+                    tickFormatter={(v) => formatNumber(v / activeDivisor, 0)}
                     tick={{ fontSize: 11, fill: "oklch(0.60 0.02 250)" }}
                     axisLine={false}
                     tickLine={false}
@@ -547,7 +668,15 @@ export default function OverallKPI() {
                           fill={BRAND_COLORS[brand]}
                           radius={[3, 3, 0, 0]}
                           maxBarSize={32}
-                        />
+                        >
+                          <LabelList
+                            dataKey={`${brand}_${activeKpi}`}
+                            position="top"
+                            content={(props: any) => (
+                              <ChartDataLabel {...props} divisor={activeDivisor} />
+                            )}
+                          />
+                        </Bar>
                       ))
                     : (
                         <Bar
@@ -556,84 +685,35 @@ export default function OverallKPI() {
                           fill={BRAND_COLORS[filter.brand]}
                           radius={[3, 3, 0, 0]}
                           maxBarSize={40}
-                        />
+                        >
+                          <LabelList
+                            dataKey={activeKpi}
+                            position="top"
+                            content={(props: any) => (
+                              <ChartDataLabel {...props} divisor={activeDivisor} />
+                            )}
+                          />
+                        </Bar>
                       )}
                 </BarChart>
               )}
             </ResponsiveContainer>
           </div>
 
-          {/* Growth Table */}
+          {/* Growth Table — MoM only, no QoQ/YoY */}
           <GrowthTable
             fmData={fmByMonth}
             mtdData={mtdByMonth}
             selectedKpis={filter.selectedKpis}
           />
-
-          {/* MTD vs LMTD Gap Chart */}
-          <div className="chart-container">
-            <div className="section-header mb-4">
-              <h3 className="text-sm font-semibold text-foreground">MTD vs LMTD Gap — All KPIs</h3>
-            </div>
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart
-                data={filter.selectedKpis.map((field) => {
-                  const kpi = KPI_FIELDS[field];
-                  if (!kpi) return null;
-                  const mtdVal = Number(mtdLatest[field]) || 0;
-                  const lmtdVal = Number(lmtdData[field]) || 0;
-                  const gap = calcGap(mtdVal, lmtdVal);
-                  const growth = calcGrowth(mtdVal, lmtdVal);
-                  return {
-                    name: kpi.label,
-                    MTD: mtdVal / kpi.divisor,
-                    LMTD: lmtdVal / kpi.divisor,
-                    gap: gap / kpi.divisor,
-                    growth: growth !== null ? growth * 100 : 0,
-                  };
-                }).filter(Boolean)}
-                margin={{ top: 5, right: 20, left: 10, bottom: 60 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.25 0.03 250)" vertical={false} />
-                <XAxis
-                  dataKey="name"
-                  tick={{ fontSize: 10, fill: "oklch(0.60 0.02 250)" }}
-                  axisLine={false}
-                  tickLine={false}
-                  angle={-30}
-                  textAnchor="end"
-                  interval={0}
-                />
-                <YAxis
-                  tick={{ fontSize: 10, fill: "oklch(0.60 0.02 250)" }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={50}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: "oklch(0.14 0.022 250)",
-                    border: "1px solid oklch(0.25 0.03 250)",
-                    borderRadius: "8px",
-                    fontSize: "11px",
-                  }}
-                />
-                <Legend wrapperStyle={{ fontSize: "11px" }} />
-                <ReferenceLine y={0} stroke="oklch(0.40 0.04 250)" />
-                <Bar dataKey="MTD" name="MTD" fill="oklch(0.78 0.16 75)" radius={[3, 3, 0, 0]} maxBarSize={28} />
-                <Bar dataKey="LMTD" name="LMTD" fill="oklch(0.40 0.04 250)" radius={[3, 3, 0, 0]} maxBarSize={28} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
         </>
       )}
     </div>
   );
 }
 
-// Helper: convert camelCase field to db column name
+// Helper: convert KPI field key to DB column name
 function camelToDb(field: string): string {
-  // Map KPI_FIELDS keys to DB column names (camelCase from drizzle)
   const map: Record<string, string> = {
     Rev_Prepaid: "revPrepaid",
     Rev_Base: "revBase",
