@@ -80,10 +80,10 @@ export function monthLabel(ym: string): string {
 
 // ─── Brand colors ─────────────────────────────────────────────────────────────
 export const BRAND_COLORS: Record<string, string> = {
-  IM3: "#5b9cf6",
-  "3ID": "#34d399",
-  Combined: "#f5c842",
-  IOH: "#f5c842",
+  IM3: "#FFD700",
+  "3ID": "#FF00FF",
+  Combined: "#00E676",
+  IOH: "#00E676",
 };
 
 export const TENURE_COLORS: Record<string, string> = {

@@ -134,13 +134,12 @@ function ChartDataLabel({ x, y, value, divisor, width }: any) {
   );
 }
 
-// ─── Mini KPI Trend Card (for the 6 fixed KPIs above the main chart) ─────────
+// ─── Mini KPI Card (fixed 6 KPIs — shows MTD, LMTD and MoM growth) ────────────
 function MiniKpiCard({
   label,
   field,
-  fmByMonthBrand,
-  fmByMonth,
-  brand,
+  mtdValue,
+  lmtdValue,
   divisor,
   unit,
   isActive,
@@ -148,38 +147,16 @@ function MiniKpiCard({
 }: {
   label: string;
   field: string;
-  fmByMonthBrand: Record<string, any>[];
-  fmByMonth: Record<string, any>[];
-  brand: string;
+  mtdValue: number;
+  lmtdValue: number;
   divisor: number;
   unit: string;
   isActive: boolean;
   onClick: () => void;
 }) {
-  // Last 2 months for mini sparkline
-  const data = (fmByMonthBrand.length > 0 ? fmByMonthBrand : fmByMonth).slice(-6);
-  const brands = brand === "Combined" ? ["IM3", "3ID"] : [brand];
-
-  const lastVal = (() => {
-    const last = data[data.length - 1];
-    if (!last) return 0;
-    if (brand === "Combined") {
-      return brands.reduce((s, b) => s + (Number(last[`${b}_${field}`]) || 0), 0);
-    }
-    return Number(last[field]) || 0;
-  })();
-
-  const prevVal = (() => {
-    const prev = data[data.length - 2];
-    if (!prev) return 0;
-    if (brand === "Combined") {
-      return brands.reduce((s, b) => s + (Number(prev[`${b}_${field}`]) || 0), 0);
-    }
-    return Number(prev[field]) || 0;
-  })();
-
-  const growth = calcGrowth(lastVal, prevVal);
-  const isPos = (growth ?? 0) >= 0;
+  const growth = calcGrowth(mtdValue, lmtdValue);
+  const gap = calcGap(mtdValue, lmtdValue);
+  const isPos = gap >= 0;
 
   const fmt = (v: number) => {
     const s = v / divisor;
@@ -193,14 +170,24 @@ function MiniKpiCard({
       onClick={onClick}
       className={`kpi-card cursor-pointer transition-all ${isActive ? "ring-1 ring-primary" : "hover:ring-1 hover:ring-border"}`}
     >
-      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 leading-tight">{label}</p>
-      <div className="flex items-end justify-between">
-        <span className="text-xl font-bold text-foreground">{fmt(lastVal)}</span>
-        <span className={`text-xs font-semibold ${isPos ? "value-positive" : "value-negative"}`}>
-          {isPos ? "▲" : "▼"} {formatPercent(growth)}
-        </span>
+      <div className="flex items-start justify-between mb-2">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight max-w-[70%]">{label}</p>
+        <span className="text-xs text-muted-foreground">{unit}</span>
       </div>
-      <p className="text-xs text-muted-foreground mt-1">{unit} · MoM</p>
+      <div className="mb-1">
+        <span className="text-xl font-bold text-foreground">{fmt(mtdValue)}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className={`flex items-center gap-1 text-xs font-semibold ${isPos ? "value-positive" : "value-negative"}`}>
+          {isPos ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+          {formatPercent(growth)}
+        </span>
+        <span className="text-xs text-muted-foreground">vs LMTD</span>
+      </div>
+      <div className="mt-1.5 pt-1.5 border-t border-border/50 flex justify-between text-xs text-muted-foreground">
+        <span>MTD: {fmt(mtdValue)}</span>
+        <span>LMTD: {fmt(lmtdValue)}</span>
+      </div>
     </div>
   );
 }
@@ -499,29 +486,7 @@ export default function OverallKPI() {
 
       {!isLoading && hasData && (
         <>
-          {/* AMENDMENT 3: Fixed 6 KPI cards — Organic, Trade, Non-Trade, Acq Rev, Pack Purchase, Subs RGU90D */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-            {FIXED_TOP_KPIS.map((field) => {
-              const kpi = KPI_FIELDS[field];
-              if (!kpi) return null;
-              return (
-                <MiniKpiCard
-                  key={field}
-                  label={kpi.label}
-                  field={field}
-                  fmByMonthBrand={fmByMonthBrand}
-                  fmByMonth={fmByMonth}
-                  brand={filter.brand}
-                  divisor={kpi.divisor}
-                  unit={kpi.unit}
-                  isActive={activeKpi === field}
-                  onClick={() => setActiveKpi(field)}
-                />
-              );
-            })}
-          </div>
-
-          {/* Selected KPI Cards (from KPI selector) */}
+          {/* ROW 1 (now first): Selected KPI Cards with full MTD/LMTD/FM detail */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             {filter.selectedKpis.map((field) => {
               const kpi = KPI_FIELDS[field];
@@ -541,6 +506,27 @@ export default function OverallKPI() {
                     divisor={kpi.divisor}
                   />
                 </div>
+              );
+            })}
+          </div>
+
+          {/* ROW 2 (now second): Fixed 6 KPI mini-cards — Organic, Trade, Non-Trade, Acq Rev, Pack Purchase, Subs RGU90D */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            {FIXED_TOP_KPIS.map((field) => {
+              const kpi = KPI_FIELDS[field];
+              if (!kpi) return null;
+              return (
+                <MiniKpiCard
+                  key={field}
+                  label={kpi.label}
+                  field={field}
+                  mtdValue={Number(mtdLatest[field]) || 0}
+                  lmtdValue={Number(lmtdData[field]) || 0}
+                  divisor={kpi.divisor}
+                  unit={kpi.unit}
+                  isActive={activeKpi === field}
+                  onClick={() => setActiveKpi(field)}
+                />
               );
             })}
           </div>
