@@ -1,5 +1,17 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "leaflet/dist/leaflet.css";
+
+/* Leaflet dark tooltip override */
+.leaflet-tooltip-dark {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+.leaflet-tooltip-dark::before {
+  display: none !important;
+}
 
 @custom-variant dark (&:is(.dark *));
 

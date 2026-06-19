@@ -25,7 +25,8 @@ import {
   ReferenceLine,
 } from "recharts";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Wifi, TrendingUp, TrendingDown, Users } from "lucide-react";
+import { Wifi, TrendingUp, TrendingDown, Users, Map as MapIcon } from "lucide-react";
+import ChoroplethMap from "@/components/ChoroplethMap";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const TENURE_GROUPS = [
@@ -53,7 +54,8 @@ function CustomTooltip({ active, payload, label }: any) {
 
 export default function VLRAnalysis() {
   const { filter, brandsArray, areasArray, kabkotsArray } = useFilter();
-  const [activeTab, setActiveTab] = useState<"tenure" | "segments" | "ranking">("tenure");
+  const [activeTab, setActiveTab] = useState<"tenure" | "segments" | "ranking" | "map">("tenure");
+  const [mapMetric, setMapMetric] = useState<"vlr" | "growth" | "gap">("vlr");
   const [selectedBrandVlr, setSelectedBrandVlr] = useState<string>("IM3");
   const [topN, setTopN] = useState(15);
 
@@ -176,6 +178,31 @@ export default function VLRAnalysis() {
     return { top, bottom, topHvc };
   }, [kecRankQuery.data, selectedBrandVlr, topN]);
 
+  // ─── Choropleth map data: kecamatan-level VLR from kecRank ─────────────────
+  const mapData = useMemo(() => {
+    if (!kecRankQuery.data) return [];
+    const brand = selectedBrandVlr === "IM3" ? "im3" : "threeid";
+    return kecRankQuery.data
+      .filter((r) => r.kecamatan && r.kecamatan !== "Total")
+      .map((r) => {
+        const rec = r as any;
+        const mtd = Number(rec[`${brand}Mtd`] ?? 0);
+        const lmtd = Number(rec[`${brand}Lmtd`] ?? 0);
+        const gap = Number(rec[`${brand}Gap`] ?? 0);
+        const growth = lmtd > 0 ? ((mtd - lmtd) / lmtd) * 100 : null;
+        // VLR rate: compute as MTD/LMTD ratio × 100 for relative performance
+        const vlrValue = lmtd > 0 ? (mtd / lmtd) * 100 : null;
+        return {
+          kecamatan: String(r.kecamatan ?? "").toUpperCase(),
+          kabupaten: String(rec.kabkot ?? "").toUpperCase(),
+          value: mapMetric === "vlr" ? vlrValue : mapMetric === "gap" ? gap : growth,
+          valueMtd: mtd,
+          valueLmtd: lmtd,
+          growth: growth,
+        };
+      });
+  }, [kecRankQuery.data, selectedBrandVlr, mapMetric]);
+
   const isLoading = vlrQuery.isLoading || segmentsQuery.isLoading || kecRankQuery.isLoading;
 
   return (
@@ -211,6 +238,7 @@ export default function VLRAnalysis() {
           <TabsTrigger value="tenure" className="text-xs">VLR Tenure Analysis</TabsTrigger>
           <TabsTrigger value="segments" className="text-xs">Subscriber Segments</TabsTrigger>
           <TabsTrigger value="ranking" className="text-xs">Kecamatan Ranking</TabsTrigger>
+          <TabsTrigger value="map" className="text-xs flex items-center gap-1"><MapIcon size={12} />Hotspot Map</TabsTrigger>
         </TabsList>
       </Tabs>
 
@@ -403,6 +431,76 @@ export default function VLRAnalysis() {
                 </tbody>
               </table>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ─── Hotspot Map ──────────────────────────────────────────────────── */}
+      {!isLoading && activeTab === "map" && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-xs text-muted-foreground font-medium">Map Metric:</span>
+            {(["vlr", "growth", "gap"] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => setMapMetric(m)}
+                className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                  mapMetric === m
+                    ? "bg-amber-500 text-black"
+                    : "bg-secondary text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {m === "vlr" ? "VLR Rate" : m === "growth" ? "MoM Growth" : "MTD vs LMTD Gap"}
+              </button>
+            ))}
+            <span className="text-xs text-muted-foreground ml-2">
+              Brand: <span className="font-semibold" style={{ color: selectedBrandVlr === "IM3" ? "#eab308" : "#e879f9" }}>{selectedBrandVlr}</span>
+            </span>
+          </div>
+
+          <div className="chart-container p-0 overflow-hidden" style={{ height: 560 }}>
+            <ChoroplethMap
+              data={mapData}
+              metric={mapMetric === "growth" ? "growth" : mapMetric === "gap" ? "gap" : "vlr"}
+              title={`Kecamatan VLR Hotspot — ${selectedBrandVlr}`}
+              className="h-full"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {["Top 5 VLR Growth", "Bottom 5 VLR Growth"].map((label) => {
+              const brand = selectedBrandVlr === "IM3" ? "im3" : "threeid";
+              const sorted = [...(kecRankQuery.data ?? [])].sort((a, b) => {
+                const ag = Number((a as any)[`${brand}Gap`] ?? 0);
+                const bg = Number((b as any)[`${brand}Gap`] ?? 0);
+                return label.includes("Top") ? bg - ag : ag - bg;
+              }).slice(0, 5);
+              return (
+                <div key={label} className="chart-container col-span-1 lg:col-span-2">
+                  <h4 className={`text-xs font-semibold mb-3 flex items-center gap-1 ${
+                    label.includes("Top") ? "value-positive" : "value-negative"
+                  }`}>
+                    {label.includes("Top") ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                    {label} — {selectedBrandVlr}
+                  </h4>
+                  <div className="space-y-2">
+                    {sorted.map((r, i) => {
+                      const gap = Number((r as any)[`${brand}Gap`] ?? 0);
+                      return (
+                        <div key={i} className="flex items-center justify-between text-xs">
+                          <span className="text-foreground font-medium truncate max-w-[140px]">{r.kecamatan}</span>
+                          <span className={`font-bold tabular-nums ${
+                            gap >= 0 ? "value-positive" : "value-negative"
+                          }`}>
+                            {gap >= 0 ? "+" : ""}{(gap / 1000).toFixed(1)}K
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
