@@ -185,7 +185,7 @@ function MiniKpiCard({
         <span className="text-xs text-muted-foreground">vs LMTD</span>
       </div>
       <div className="mt-1.5 pt-1.5 border-t border-border/50 flex justify-between text-xs text-muted-foreground">
-        <span>MTD: {fmt(mtdValue)}</span>
+        <span>Full Month: {fmt(mtdValue)}</span>
         <span>LMTD: {fmt(lmtdValue)}</span>
       </div>
     </div>
