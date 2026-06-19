@@ -79,7 +79,7 @@ function KpiCard({
         </span>
       </div>
       <div className="mt-2 pt-2 border-t border-border/50 flex justify-between text-xs text-muted-foreground">
-        <span>FM: {fmt(fmValue)}</span>
+        <span>Last FM: {fmt(fmValue)}</span>
         <span>LMTD: {fmt(lmtdValue)}</span>
       </div>
     </div>
@@ -417,9 +417,12 @@ export default function OverallKPI() {
   const isLoading = fmQuery.isLoading || mtdQuery.isLoading;
   const hasData = fmByMonth.length > 0 || mtdByMonth.length > 0;
 
-  // Chart data: use FM for trend, with brand split when Combined
+  // Chart data: always use fmByMonthBrand (has prefixed keys like IM3_Rev_Trade)
+  // For single-brand mode we use the prefixed key ${brand}_${activeKpi} from fmByMonthBrand
   const chartData = fmByMonthBrand.length > 0 ? fmByMonthBrand : fmByMonth;
   const brands = filter.brand === "Combined" ? ["IM3", "3ID"] : [filter.brand];
+  // In single-brand mode the dataKey must use the brand prefix (data is stored as IM3_Rev_Trade etc)
+  const singleBrandDataKey = filter.brand === "Combined" ? activeKpi : `${filter.brand}_${activeKpi}`;
 
   // AMENDMENT 3: Fixed 6 KPIs to always show above the main chart
   const FIXED_TOP_KPIS = [
@@ -606,7 +609,7 @@ export default function OverallKPI() {
                     : (
                         <Line
                           type="monotone"
-                          dataKey={activeKpi}
+                          dataKey={singleBrandDataKey}
                           name={filter.brand}
                           stroke={BRAND_COLORS[filter.brand]}
                           strokeWidth={2.5}
@@ -614,7 +617,7 @@ export default function OverallKPI() {
                           activeDot={{ r: 5, strokeWidth: 0 }}
                         >
                           <LabelList
-                            dataKey={activeKpi}
+                            dataKey={singleBrandDataKey}
                             position="top"
                             content={(props: any) => (
                               <ChartDataLabel {...props} divisor={activeDivisor} />
@@ -666,14 +669,14 @@ export default function OverallKPI() {
                       ))
                     : (
                         <Bar
-                          dataKey={activeKpi}
+                          dataKey={singleBrandDataKey}
                           name={filter.brand}
                           fill={BRAND_COLORS[filter.brand]}
                           radius={[3, 3, 0, 0]}
                           maxBarSize={40}
                         >
                           <LabelList
-                            dataKey={activeKpi}
+                            dataKey={singleBrandDataKey}
                             position="top"
                             content={(props: any) => (
                               <ChartDataLabel {...props} divisor={activeDivisor} />
