@@ -54,3 +54,13 @@
 - [x] Loading skeletons and empty states
 - [x] Vitest unit tests for server routers (15 tests passing)
 - [x] Final checkpoint
+
+## Phase 10: ANOVA Page Redesign
+- [x] Replace all charts/waterfall with structured performance table layout
+- [x] Revenue rows: Total, Base, Acquisition, Organic, Trade, Non-Trade, Voucher Game
+- [x] Columns: MTD, LMTD, Last FM, GAP, Growth %
+- [x] 6 summary boxes at top (one per revenue component)
+- [x] Brand comparison table (IM3 / 3ID / IOH side by side)
+- [x] Voucher Game normalization toggle (subtracts from Total Revenue when ON)
+- [x] Dynamic filters: Brand, Area, Branch via GlobalFilterBar
+- [x] Period labels in header (MTD month, LMTD month, Last FM month)

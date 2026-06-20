@@ -1,143 +1,316 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useFilter } from "@/contexts/FilterContext";
 import { GlobalFilterBar } from "@/components/GlobalFilterBar";
-import { formatNumber, formatPercent, monthLabel, BRAND_COLORS } from "@/lib/kpiUtils";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  Cell,
-  ReferenceLine,
-  ComposedChart,
-  Line,
-} from "recharts";
+import { formatNumber, BRAND_COLORS } from "@/lib/kpiUtils";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Activity, TrendingDown, TrendingUp } from "lucide-react";
+import { TrendingDown, TrendingUp, Minus } from "lucide-react";
 
-// ─── Waterfall Chart ──────────────────────────────────────────────────────────
-// Shows: LMTD Base (total) → gap components → MTD Total (total)
-// The invisible 'start' bar stacks below each gap component to position it correctly
-function WaterfallChart({ data }: { data: Array<{ name: string; value: number; isTotal?: boolean }> }) {
-  let running = 0;
-  const chartData = data.map((d) => {
-    if (d.isTotal) {
-      // Total bars start from 0 and show the full value
-      return {
-        ...d,
-        start: 0,
-        bar: d.value,
-        displayValue: d.value,
-        fill: d.value >= 0 ? "oklch(0.78 0.16 75)" : "oklch(0.60 0.20 25)",
-      };
-    }
-    // For gap bars: position them using the running total as the base
-    const start = d.value >= 0 ? running : running + d.value;
-    const bar = Math.abs(d.value);
-    running += d.value;
-    return {
-      ...d,
-      start,
-      bar,
-      displayValue: d.value,
-      fill: d.value >= 0 ? "oklch(0.68 0.18 145)" : "oklch(0.60 0.20 25)",
-    };
-  });
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function fmtRev(v: number): string {
+  const abs = Math.abs(v);
+  const sign = v < 0 ? "-" : "";
+  if (abs >= 1e12) return `${sign}${(abs / 1e12).toFixed(2)} T`;
+  if (abs >= 1e9) return `${sign}${(abs / 1e9).toFixed(2)} Bn`;
+  if (abs >= 1e6) return `${sign}${(abs / 1e6).toFixed(1)} Mn`;
+  if (abs >= 1e3) return `${sign}${(abs / 1e3).toFixed(1)} K`;
+  return `${sign}${abs.toFixed(0)}`;
+}
 
+function fmtGap(v: number): string {
+  const sign = v >= 0 ? "+" : "";
+  return sign + fmtRev(v);
+}
+
+function fmtGrowth(v: number): string {
+  const sign = v >= 0 ? "+" : "";
+  return `${sign}${v.toFixed(1)}%`;
+}
+
+function growthClass(v: number): string {
+  if (v > 0) return "value-positive";
+  if (v < 0) return "value-negative";
+  return "text-muted-foreground";
+}
+
+function GrowthIcon({ v }: { v: number }) {
+  if (v > 0) return <TrendingUp className="inline w-3 h-3 mr-0.5" />;
+  if (v < 0) return <TrendingDown className="inline w-3 h-3 mr-0.5" />;
+  return <Minus className="inline w-3 h-3 mr-0.5" />;
+}
+
+// ─── Row definition ───────────────────────────────────────────────────────────
+interface RevRow {
+  label: string;
+  sublabel?: string;
+  indent?: boolean;
+  isBold?: boolean;
+  isSeparator?: boolean;
+  mtd: number;
+  lmtd: number;
+  lastFm: number;
+  gap: number;
+  growth: number;
+  isVoucherRow?: boolean;
+}
+
+// ─── Summary Box ──────────────────────────────────────────────────────────────
+function SummaryBox({
+  label,
+  sublabel,
+  mtd,
+  lmtd,
+  gap,
+  growth,
+  accentColor,
+}: {
+  label: string;
+  sublabel?: string;
+  mtd: number;
+  lmtd: number;
+  gap: number;
+  growth: number;
+  accentColor?: string;
+}) {
   return (
-    <ResponsiveContainer width="100%" height={320}>
-      <ComposedChart data={chartData} margin={{ top: 10, right: 30, left: 20, bottom: 60 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.25 0.03 250)" vertical={false} />
-        <XAxis
-          dataKey="name"
-          tick={{ fontSize: 10, fill: "oklch(0.60 0.02 250)" }}
-          axisLine={false}
-          tickLine={false}
-          angle={-30}
-          textAnchor="end"
-          interval={0}
-          height={60}
-        />
-        <YAxis
-          tick={{ fontSize: 10, fill: "oklch(0.60 0.02 250)" }}
-          axisLine={false}
-          tickLine={false}
-          width={70}
-          tickFormatter={(v) => `${formatNumber(v / 1e9, 1)}B`}
-        />
-        <Tooltip
-          contentStyle={{
-            background: "oklch(0.14 0.022 250)",
-            border: "1px solid oklch(0.25 0.03 250)",
-            borderRadius: "8px",
-            fontSize: "11px",
-          }}
-          formatter={(_value: any, _name: any, props: any) => {
-            const v = props.payload.displayValue;
-            const abs = Math.abs(v);
-            const sign = v >= 0 ? "+" : "-";
-            const formatted = abs >= 1e9 ? `${sign}${(abs / 1e9).toFixed(2)} Bn IDR` : `${sign}${(abs / 1e6).toFixed(1)} Mn IDR`;
-            return [formatted, props.payload.name];
-          }}
-        />
-        <ReferenceLine y={0} stroke="oklch(0.40 0.04 250)" strokeWidth={1} />
-        {/* Invisible base bar for stacking waterfall position */}
-        <Bar dataKey="start" fill="transparent" stackId="waterfall" isAnimationActive={false} />
-        <Bar dataKey="bar" stackId="waterfall" radius={[3, 3, 0, 0]} maxBarSize={50} isAnimationActive={false}>
-          {chartData.map((entry, i) => (
-            <Cell key={i} fill={entry.fill} />
-          ))}
-        </Bar>
-      </ComposedChart>
-    </ResponsiveContainer>
+    <div
+      className="kpi-card flex flex-col gap-2"
+      style={{ borderLeft: `3px solid ${accentColor ?? "oklch(0.78 0.16 75)"}` }}
+    >
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+        {sublabel && <p className="text-[10px] text-muted-foreground/70">{sublabel}</p>}
+      </div>
+      <div className="flex items-end justify-between gap-2">
+        <div>
+          <p className="text-[10px] text-muted-foreground mb-0.5">MTD</p>
+          <p className="text-lg font-bold text-foreground">{fmtRev(mtd)}</p>
+        </div>
+        <div className="text-right">
+          <p className="text-[10px] text-muted-foreground mb-0.5">LMTD</p>
+          <p className="text-sm font-medium text-foreground/80">{fmtRev(lmtd)}</p>
+        </div>
+      </div>
+      <div className="flex items-center justify-between pt-1 border-t border-border/30">
+        <span className={`text-sm font-semibold ${growthClass(gap)}`}>
+          <GrowthIcon v={gap} />
+          {fmtGap(gap)} IDR
+        </span>
+        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${growth >= 0 ? "bg-green-500/15 text-green-400" : "bg-red-500/15 text-red-400"}`}>
+          {fmtGrowth(growth)}
+        </span>
+      </div>
+    </div>
   );
 }
 
-// ─── Gap Driver Summary Card ──────────────────────────────────────────────────
-function GapDriverCard({
-  title,
-  items,
-}: {
-  title: string;
-  items: Array<{ label: string; value: number; unit: string; isPositive?: boolean }>;
-}) {
+// ─── Performance Table ────────────────────────────────────────────────────────
+function PerformanceTable({ rows, title }: { rows: RevRow[]; title: string }) {
   return (
-    <div className="kpi-card">
-      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">{title}</p>
-      <div className="space-y-2">
-        {items.map((item, i) => (
-          <div key={i} className="flex items-center justify-between">
-            <span className="text-xs text-foreground/80">{item.label}</span>
-            <span
-              className={`text-sm font-semibold ${
-                item.isPositive === undefined
-                  ? "text-foreground"
-                  : item.isPositive
-                  ? "value-positive"
-                  : "value-negative"
-              }`}
-            >
-              {item.isPositive !== undefined && (item.value >= 0 ? "+" : "")}
-              {(() => {
-                const abs = Math.abs(item.value);
-                const sign = item.value < 0 ? "-" : "";
-                if (abs >= 1e9) return `${sign}${(abs / 1e9).toFixed(2)}B`;
-                if (abs >= 1e6) return `${sign}${(abs / 1e6).toFixed(1)}M`;
-                if (abs >= 1e3) return `${sign}${(abs / 1e3).toFixed(1)}K`;
-                return `${sign}${abs.toFixed(1)}`;
-              })()}{" "}
-              {item.unit}
-            </span>
-          </div>
-        ))}
+    <div className="chart-container overflow-x-auto">
+      <div className="section-header mb-4">
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
       </div>
+      <table className="w-full text-xs data-table min-w-[700px]">
+        <thead>
+          <tr>
+            <th className="text-left py-2.5 px-4 rounded-l-md w-[220px]">Revenue Component</th>
+            <th className="text-right py-2.5 px-4">MTD (Bn IDR)</th>
+            <th className="text-right py-2.5 px-4">LMTD (Bn IDR)</th>
+            <th className="text-right py-2.5 px-4">Last FM (Bn IDR)</th>
+            <th className="text-right py-2.5 px-4">GAP (MTD−LMTD)</th>
+            <th className="text-right py-2.5 px-4 rounded-r-md">Growth %</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => {
+            if (row.isSeparator) {
+              return (
+                <tr key={i}>
+                  <td colSpan={6} className="py-1 px-4">
+                    <div className="border-t border-border/20" />
+                  </td>
+                </tr>
+              );
+            }
+            return (
+              <tr
+                key={i}
+                className={`border-t border-border/20 hover:bg-accent/10 transition-colors ${
+                  row.isBold ? "bg-accent/5" : ""
+                } ${row.isVoucherRow ? "opacity-80" : ""}`}
+              >
+                <td className={`py-2.5 px-4 ${row.indent ? "pl-8" : ""}`}>
+                  <span className={row.isBold ? "font-semibold text-foreground" : "text-foreground/85"}>
+                    {row.label}
+                  </span>
+                  {row.sublabel && (
+                    <span className="ml-1.5 text-[10px] text-muted-foreground">{row.sublabel}</span>
+                  )}
+                </td>
+                <td className="py-2.5 px-4 text-right font-medium">
+                  {formatNumber(row.mtd / 1e9, 2)}
+                </td>
+                <td className="py-2.5 px-4 text-right text-muted-foreground">
+                  {formatNumber(row.lmtd / 1e9, 2)}
+                </td>
+                <td className="py-2.5 px-4 text-right text-muted-foreground">
+                  {formatNumber(row.lastFm / 1e9, 2)}
+                </td>
+                <td className={`py-2.5 px-4 text-right font-semibold ${growthClass(row.gap)}`}>
+                  {fmtGap(row.gap / 1e9)}
+                </td>
+                <td className={`py-2.5 px-4 text-right ${growthClass(row.growth)}`}>
+                  <GrowthIcon v={row.growth} />
+                  {fmtGrowth(row.growth)}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ─── Brand Performance Table (side-by-side IM3 / 3ID / IOH) ──────────────────
+interface BrandMetrics {
+  mtd: number;
+  lmtd: number;
+  lastFm: number;
+}
+
+function BrandPerformanceTable({
+  im3,
+  sid,
+  ioh,
+  normalizeVoucher,
+  voucherIm3,
+  voucher3id,
+}: {
+  im3: Record<string, BrandMetrics>;
+  sid: Record<string, BrandMetrics>;
+  ioh: Record<string, BrandMetrics>;
+  normalizeVoucher: boolean;
+  voucherIm3: number;
+  voucher3id: number;
+}) {
+  const rows: Array<{ label: string; field: string; indent?: boolean; isBold?: boolean; isVoucher?: boolean }> = [
+    { label: "Total Revenue", field: "revPrepaid", isBold: true },
+    { label: "Base Revenue", field: "revBase", indent: true },
+    { label: "Acquisition Revenue", field: "revAcqM0", indent: true },
+    { label: "─ Organic Channel", field: "revOrganic", indent: true },
+    { label: "─ Trade Channel", field: "revTrade", indent: true },
+    { label: "─ Non-Trade Channel", field: "revNonTrade", indent: true },
+    { label: "Voucher Game Effect", field: "voucher", isVoucher: true },
+  ];
+
+  const voucherEffect = { im3: voucherIm3, "3id": voucher3id, ioh: voucherIm3 + voucher3id };
+
+  function getVal(brand: "im3" | "3id" | "ioh", field: string, period: "mtd" | "lmtd" | "lastFm"): number {
+    const map = brand === "im3" ? im3 : brand === "3id" ? sid : ioh;
+    if (field === "voucher") {
+      return voucherEffect[brand];
+    }
+    return map[field]?.[period] ?? 0;
+  }
+
+  function getAdjustedVal(brand: "im3" | "3id" | "ioh", field: string, period: "mtd" | "lmtd" | "lastFm"): number {
+    const raw = getVal(brand, field, period);
+    if (normalizeVoucher && field === "revPrepaid") {
+      return raw - (period === "mtd" ? voucherEffect[brand] : 0);
+    }
+    return raw;
+  }
+
+  const brandCols: Array<{ key: "im3" | "3id" | "ioh"; label: string; color: string }> = [
+    { key: "im3", label: "IM3", color: BRAND_COLORS["IM3"] },
+    { key: "3id", label: "3ID", color: BRAND_COLORS["3ID"] },
+    { key: "ioh", label: "IOH", color: BRAND_COLORS["IOH"] },
+  ];
+
+  return (
+    <div className="chart-container overflow-x-auto">
+      <div className="section-header mb-4">
+        <h3 className="text-sm font-semibold text-foreground">
+          Revenue Performance by Brand
+          {normalizeVoucher && (
+            <span className="ml-2 text-xs font-normal text-amber-400">(Voucher Game Normalized)</span>
+          )}
+        </h3>
+      </div>
+      <table className="w-full text-xs data-table min-w-[900px]">
+        <thead>
+          <tr>
+            <th className="text-left py-2.5 px-4 rounded-l-md w-[200px]">Revenue Component</th>
+            {brandCols.map((b) => (
+              <>
+                <th
+                  key={`${b.key}-mtd`}
+                  className="text-right py-2.5 px-3"
+                  style={{ color: b.color }}
+                >
+                  {b.label} MTD
+                </th>
+                <th key={`${b.key}-lmtd`} className="text-right py-2.5 px-3 text-muted-foreground">
+                  {b.label} LMTD
+                </th>
+                <th
+                  key={`${b.key}-gap`}
+                  className="text-right py-2.5 px-3 rounded-r-md"
+                  style={{ color: b.color }}
+                >
+                  {b.label} GAP
+                </th>
+              </>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr
+              key={i}
+              className={`border-t border-border/20 hover:bg-accent/10 transition-colors ${
+                row.isBold ? "bg-accent/5" : ""
+              } ${row.isVoucher ? "opacity-75" : ""}`}
+            >
+              <td className={`py-2.5 px-4 ${row.indent ? "pl-7" : ""}`}>
+                <span className={row.isBold ? "font-semibold text-foreground" : "text-foreground/85"}>
+                  {row.label}
+                </span>
+              </td>
+              {brandCols.map((b) => {
+                const mtdVal = getAdjustedVal(b.key, row.field, "mtd");
+                const lmtdVal = getAdjustedVal(b.key, row.field, "lmtd");
+                const gap = mtdVal - lmtdVal;
+                const growth = lmtdVal !== 0 ? (gap / Math.abs(lmtdVal)) * 100 : 0;
+                return (
+                  <>
+                    <td key={`${b.key}-mtd`} className="py-2.5 px-3 text-right font-medium">
+                      {row.isVoucher ? fmtRev(mtdVal) : formatNumber(mtdVal / 1e9, 2)}
+                    </td>
+                    <td key={`${b.key}-lmtd`} className="py-2.5 px-3 text-right text-muted-foreground">
+                      {row.isVoucher ? fmtRev(lmtdVal) : formatNumber(lmtdVal / 1e9, 2)}
+                    </td>
+                    <td
+                      key={`${b.key}-gap`}
+                      className={`py-2.5 px-3 text-right font-semibold ${growthClass(gap)}`}
+                    >
+                      {row.isVoucher
+                        ? fmtGap(gap)
+                        : `${gap >= 0 ? "+" : ""}${formatNumber(gap / 1e9, 2)}`}
+                      <span className={`ml-1 text-[10px] font-normal ${growthClass(growth)}`}>
+                        ({fmtGrowth(growth)})
+                      </span>
+                    </td>
+                  </>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -145,7 +318,6 @@ function GapDriverCard({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ANOVAAnalysis() {
   const { filter, brandsArray, areasArray, salesAreasArray, kabkotsArray, setNormalizeVoucher } = useFilter();
-  const [activeTab, setActiveTab] = useState<"brand" | "branch" | "channel" | "stream" | "vlr">("brand");
 
   const fmQuery = trpc.fm.trend.useQuery({
     brands: brandsArray,
@@ -166,486 +338,335 @@ export default function ANOVAAnalysis() {
     areas: areasArray.length ? areasArray : undefined,
   });
 
-  // ─── Aggregate helpers ────────────────────────────────────────────────────
-  const months = useMemo(() => {
-    if (!fmQuery.data) return [];
-    return Array.from(new Set(fmQuery.data.map((r) => String(r.yearMonth ?? "")))).sort();
+  // ─── Period resolution ────────────────────────────────────────────────────
+  const { mtdMonths, latestMtd, prevMtd } = useMemo(() => {
+    if (!mtdQuery.data) return { mtdMonths: [], latestMtd: "", prevMtd: "" };
+    const months = Array.from(new Set(mtdQuery.data.map((r) => String(r.yearMonth ?? "")))).sort();
+    return {
+      mtdMonths: months,
+      latestMtd: months[months.length - 1] ?? "",
+      prevMtd: months[months.length - 2] ?? "",
+    };
+  }, [mtdQuery.data]);
+
+  const { fmMonths, latestFm } = useMemo(() => {
+    if (!fmQuery.data) return { fmMonths: [], latestFm: "" };
+    const months = Array.from(new Set(fmQuery.data.map((r) => String(r.yearMonth ?? "")))).sort();
+    return { fmMonths: months, latestFm: months[months.length - 1] ?? "" };
   }, [fmQuery.data]);
 
-  const latestMonth = months[months.length - 1];
-  const prevMonth = months[months.length - 2];
-
-  // Aggregate by dimension
-  const aggregateByDim = (
-    data: any[],
-    dimField: string,
-    valueField: string,
-    monthFilter?: string
-  ) => {
-    const map = new Map<string, number>();
-    for (const row of (data as any[])) {
-      if (monthFilter && String(row.yearMonth ?? "") !== monthFilter) continue;
-      const dim = String(row[dimField] ?? "Unknown");
-      map.set(dim, (map.get(dim) ?? 0) + (Number(row[valueField]) || 0));
-    }
-    return Array.from(map.entries()).map(([name, value]) => ({ name, value }));
+  // ─── Aggregate helpers ────────────────────────────────────────────────────
+  type RevFields = {
+    revPrepaid: number;
+    revBase: number;
+    revAcqM0: number;
+    revOrganic: number;
+    revTrade: number;
+    revNonTrade: number;
   };
 
-  // Voucher game effect
-  const voucherEffect = useMemo(() => {
-    if (!voucherQuery.data) return 0;
-    return (voucherQuery.data as any[])
-      .filter((r) => String(r.yearMonth ?? "") === latestMonth)
-      .reduce((s: number, r: any) => s + (Number(r.totalEffect) || 0), 0);
-  }, [voucherQuery.data, latestMonth]);
+  const ZERO_FIELDS: RevFields = {
+    revPrepaid: 0, revBase: 0, revAcqM0: 0,
+    revOrganic: 0, revTrade: 0, revNonTrade: 0,
+  };
 
-  // Revenue by brand (MTD vs LMTD)
-  const revByBrand = useMemo(() => {
-    if (!mtdQuery.data) return [];
-    const allMonths = Array.from(new Set(mtdQuery.data.map((r) => String(r.yearMonth ?? "")))).sort();
-    const latestM = allMonths[allMonths.length - 1];
-    const prevM = allMonths[allMonths.length - 2];
-    const brands2 = Array.from(new Set(mtdQuery.data.map((r) => String(r.brand ?? ""))));
-    return brands2.map((brand) => {
-      const mtd = mtdQuery.data!
-        .filter((r) => String(r.brand ?? "") === brand && String(r.yearMonth ?? "") === latestM)
-        .reduce((s: number, r) => s + (Number(r.revPrepaid) || 0), 0);
-      const lmtd = mtdQuery.data!
-        .filter((r) => String(r.brand ?? "") === brand && String(r.yearMonth ?? "") === prevM)
-        .reduce((s: number, r) => s + (Number(r.revPrepaid) || 0), 0);
-      const gap = mtd - lmtd;
-      return { name: brand, MTD: mtd, LMTD: lmtd, gap, growth: lmtd ? (gap / lmtd) * 100 : 0 };
-    });
-  }, [mtdQuery.data, latestMonth]);
-
-  // Revenue by branch
-  const revByBranch = useMemo(() => {
-    if (!mtdQuery.data) return [];
-    const branchMap = new Map<string, { mtd: number; lmtd: number }>();
-    const months2 = Array.from(new Set(mtdQuery.data.map((r) => String(r.yearMonth ?? "")))).sort();
-    const latest = months2[months2.length - 1];
-    const prev = months2[months2.length - 2];
-    for (const row of mtdQuery.data) {
-      const branch = String((row as any).salesArea ?? "Unknown");
-      const ym = String(row.yearMonth ?? "");
-      if (!branchMap.has(branch)) branchMap.set(branch, { mtd: 0, lmtd: 0 });
-      const e = branchMap.get(branch)!;
-      if (ym === latest) e.mtd += Number(row.revPrepaid) || 0;
-      if (ym === prev) e.lmtd += Number(row.revPrepaid) || 0;
+  function sumRows(data: any[], yearMonthFilter: string): RevFields {
+    const acc = { ...ZERO_FIELDS };
+    for (const row of data) {
+      if (String(row.yearMonth ?? "") !== yearMonthFilter) continue;
+      acc.revPrepaid += Number(row.revPrepaid) || 0;
+      acc.revBase += Number(row.revBase) || 0;
+      acc.revAcqM0 += Number(row.revAcqM0) || 0;
+      acc.revOrganic += Number(row.revOrganic) || 0;
+      acc.revTrade += Number(row.revTrade) || 0;
+      acc.revNonTrade += Number(row.revNonTrade) || 0;
     }
-    return Array.from(branchMap.entries())
-      .map(([name, v]) => ({
-        name,
-        MTD: v.mtd,
-        LMTD: v.lmtd,
-        gap: v.mtd - v.lmtd,
-        growth: v.lmtd ? ((v.mtd - v.lmtd) / v.lmtd) * 100 : 0,
-      }))
-      .sort((a, b) => a.gap - b.gap);
-  }, [mtdQuery.data]);
+    return acc;
+  }
 
-  // Revenue by channel
-  const revByChannel = useMemo(() => {
-    if (!mtdQuery.data) return [];
-    const months2 = Array.from(new Set(mtdQuery.data.map((r) => String(r.yearMonth ?? "")))).sort();
-    const latest = months2[months2.length - 1];
-    const prev = months2[months2.length - 2];
-    const channels = [
-      { key: "revTrade", label: "Trade" },
-      { key: "revNonTrade", label: "Non-Trade" },
-      { key: "revOrganic", label: "Organic" },
-      { key: "revVsd", label: "VSD" },
-    ];
-    return channels.map(({ key, label }) => {
-      const mtd = mtdQuery.data!
-        .filter((r) => String(r.yearMonth ?? "") === latest)
-        .reduce((s, r) => s + (Number((r as any)[key]) || 0), 0);
-      const lmtd = mtdQuery.data!
-        .filter((r) => String(r.yearMonth ?? "") === prev)
-        .reduce((s, r) => s + (Number((r as any)[key]) || 0), 0);
-      const gap = mtd - lmtd;
-      return { name: label, MTD: mtd, LMTD: lmtd, gap, growth: lmtd ? (gap / lmtd) * 100 : 0 };
-    });
-  }, [mtdQuery.data]);
-
-  // Revenue by stream (Acq vs Base)
-  const revByStream = useMemo(() => {
-    if (!mtdQuery.data) return [];
-    const months2 = Array.from(new Set(mtdQuery.data.map((r) => String(r.yearMonth ?? "")))).sort();
-    const latest = months2[months2.length - 1];
-    const prev = months2[months2.length - 2];
-    const streams = [
-      { key: "revAcqM0", label: "Acquisition" },
-      { key: "revBase", label: "Base" },
-    ];
-    return streams.map(({ key, label }) => {
-      const mtd = mtdQuery.data!
-        .filter((r) => String(r.yearMonth ?? "") === latest)
-        .reduce((s, r) => s + (Number((r as any)[key]) || 0), 0);
-      const lmtd = mtdQuery.data!
-        .filter((r) => String(r.yearMonth ?? "") === prev)
-        .reduce((s, r) => s + (Number((r as any)[key]) || 0), 0);
-      const gap = mtd - lmtd;
-      return { name: label, MTD: mtd, LMTD: lmtd, gap, growth: lmtd ? (gap / lmtd) * 100 : 0 };
-    });
-  }, [mtdQuery.data]);
-
-  // VLR gap by branch
-  const vlrByBranch = useMemo(() => {
-    if (!mtdQuery.data) return [];
-    const months2 = Array.from(new Set(mtdQuery.data.map((r) => String(r.yearMonth ?? "")))).sort();
-    const latest = months2[months2.length - 1];
-    const prev = months2[months2.length - 2];
-    const branchMap = new Map<string, { mtd: number; lmtd: number }>();
-    for (const row of mtdQuery.data) {
-      const branch = String((row as any).salesArea ?? "Unknown");
-      const ym = String(row.yearMonth ?? "");
-      if (!branchMap.has(branch)) branchMap.set(branch, { mtd: 0, lmtd: 0 });
-      const e = branchMap.get(branch)!;
-      if (ym === latest) e.mtd += Number(row.subsAvgVlrDaily) || 0;
-      if (ym === prev) e.lmtd += Number(row.subsAvgVlrDaily) || 0;
+  function sumRowsByBrand(data: any[], yearMonthFilter: string, brand: string): RevFields {
+    const acc = { ...ZERO_FIELDS };
+    for (const row of data) {
+      if (String(row.yearMonth ?? "") !== yearMonthFilter) continue;
+      if (String(row.brand ?? "") !== brand) continue;
+      acc.revPrepaid += Number(row.revPrepaid) || 0;
+      acc.revBase += Number(row.revBase) || 0;
+      acc.revAcqM0 += Number(row.revAcqM0) || 0;
+      acc.revOrganic += Number(row.revOrganic) || 0;
+      acc.revTrade += Number(row.revTrade) || 0;
+      acc.revNonTrade += Number(row.revNonTrade) || 0;
     }
-    return Array.from(branchMap.entries())
-      .map(([name, v]) => ({
-        name,
-        MTD: v.mtd / 1000,
-        LMTD: v.lmtd / 1000,
-        gap: (v.mtd - v.lmtd) / 1000,
-        growth: v.lmtd ? ((v.mtd - v.lmtd) / v.lmtd) * 100 : 0,
-      }))
-      .sort((a, b) => a.gap - b.gap);
-  }, [mtdQuery.data]);
+    return acc;
+  }
 
-  // Waterfall data
-  const waterfallData = useMemo(() => {
-    const totalMtd = revByBrand.reduce((s, r) => s + r.MTD, 0);
-    const totalLmtd = revByBrand.reduce((s, r) => s + r.LMTD, 0);
-    const totalGap = totalMtd - totalLmtd;
+  // ─── IOH (combined) aggregates ────────────────────────────────────────────
+  const iohMtd = useMemo(() => sumRows(mtdQuery.data ?? [], latestMtd), [mtdQuery.data, latestMtd]);
+  const iohLmtd = useMemo(() => sumRows(mtdQuery.data ?? [], prevMtd), [mtdQuery.data, prevMtd]);
+  const iohFm = useMemo(() => sumRows(fmQuery.data ?? [], latestFm), [fmQuery.data, latestFm]);
 
-    const items = [
-      { name: "LMTD Base", value: totalLmtd, isTotal: false },
-      ...revByChannel.map((c) => ({ name: c.name, value: c.gap, isTotal: false })),
-      { name: "MTD Total", value: totalMtd, isTotal: true },
+  // ─── Per-brand aggregates ─────────────────────────────────────────────────
+  const im3Mtd = useMemo(() => sumRowsByBrand(mtdQuery.data ?? [], latestMtd, "IM3"), [mtdQuery.data, latestMtd]);
+  const im3Lmtd = useMemo(() => sumRowsByBrand(mtdQuery.data ?? [], prevMtd, "IM3"), [mtdQuery.data, prevMtd]);
+  const im3Fm = useMemo(() => sumRowsByBrand(fmQuery.data ?? [], latestFm, "IM3"), [fmQuery.data, latestFm]);
+
+  const sid3Mtd = useMemo(() => sumRowsByBrand(mtdQuery.data ?? [], latestMtd, "3ID"), [mtdQuery.data, latestMtd]);
+  const sid3Lmtd = useMemo(() => sumRowsByBrand(mtdQuery.data ?? [], prevMtd, "3ID"), [mtdQuery.data, prevMtd]);
+  const sid3Fm = useMemo(() => sumRowsByBrand(fmQuery.data ?? [], latestFm, "3ID"), [fmQuery.data, latestFm]);
+
+  // ─── Voucher game effect ──────────────────────────────────────────────────
+  const { voucherIm3, voucher3id, voucherTotal } = useMemo(() => {
+    const rows = (voucherQuery.data ?? []) as any[];
+    const latestVoucher = rows.length
+      ? Array.from(new Set(rows.map((r) => String(r.yearMonth ?? "")))).sort().at(-1)
+      : "";
+    const filtered = rows.filter((r) => String(r.yearMonth ?? "") === latestVoucher);
+    const im3 = filtered
+      .filter((r) => String(r.brand ?? "").toUpperCase() === "IM3")
+      .reduce((s, r) => s + (Number(r.totalEffect) || 0), 0);
+    const sid = filtered
+      .filter((r) => String(r.brand ?? "").toUpperCase() === "3ID")
+      .reduce((s, r) => s + (Number(r.totalEffect) || 0), 0);
+    return { voucherIm3: im3, voucher3id: sid, voucherTotal: im3 + sid };
+  }, [voucherQuery.data]);
+
+  const normalizeVoucher = filter.normalizeVoucher;
+
+  // ─── Build IOH performance rows ───────────────────────────────────────────
+  const iohRows = useMemo((): RevRow[] => {
+    const fields: Array<{ label: string; field: keyof RevFields; indent?: boolean; isBold?: boolean }> = [
+      { label: "Total Revenue", field: "revPrepaid", isBold: true },
+      { label: "Base Revenue", field: "revBase", indent: true },
+      { label: "Acquisition Revenue", field: "revAcqM0", indent: true },
+      { label: "Organic Channel Revenue", field: "revOrganic", indent: true },
+      { label: "Trade Channel Revenue", field: "revTrade", indent: true },
+      { label: "Non-Trade Channel Revenue", field: "revNonTrade", indent: true },
     ];
 
-    if (filter.normalizeVoucher && voucherEffect !== 0) {
-      items.splice(items.length - 1, 0, {
-        name: "Voucher Game",
-        value: -voucherEffect,
-        isTotal: false,
-      });
+    const rows: RevRow[] = fields.map(({ label, field, indent, isBold }) => {
+      let mtd = iohMtd[field];
+      let lmtd = iohLmtd[field];
+      const lastFm = iohFm[field];
+      if (normalizeVoucher && field === "revPrepaid") {
+        mtd = mtd - voucherTotal;
+      }
+      const gap = mtd - lmtd;
+      const growth = lmtd !== 0 ? (gap / Math.abs(lmtd)) * 100 : 0;
+      return { label, indent, isBold, mtd, lmtd, lastFm, gap, growth };
+    });
+
+    // Voucher Game Effect row
+    rows.push({
+      label: "Voucher Game Effect",
+      sublabel: "(excl. from Total when normalized)",
+      isVoucherRow: true,
+      mtd: voucherTotal,
+      lmtd: 0,
+      lastFm: 0,
+      gap: voucherTotal,
+      growth: 0,
+    });
+
+    return rows;
+  }, [iohMtd, iohLmtd, iohFm, voucherTotal, normalizeVoucher]);
+
+  // ─── Build per-brand metric maps ──────────────────────────────────────────
+  const im3Map = useMemo((): Record<string, BrandMetrics> => {
+    const fields = ["revPrepaid", "revBase", "revAcqM0", "revOrganic", "revTrade", "revNonTrade"] as const;
+    const map: Record<string, BrandMetrics> = {};
+    for (const f of fields) {
+      map[f] = { mtd: im3Mtd[f], lmtd: im3Lmtd[f], lastFm: im3Fm[f] };
     }
+    return map;
+  }, [im3Mtd, im3Lmtd, im3Fm]);
 
-    return items;
-  }, [revByBrand, revByChannel, filter.normalizeVoucher, voucherEffect]);
+  const sid3Map = useMemo((): Record<string, BrandMetrics> => {
+    const fields = ["revPrepaid", "revBase", "revAcqM0", "revOrganic", "revTrade", "revNonTrade"] as const;
+    const map: Record<string, BrandMetrics> = {};
+    for (const f of fields) {
+      map[f] = { mtd: sid3Mtd[f], lmtd: sid3Lmtd[f], lastFm: sid3Fm[f] };
+    }
+    return map;
+  }, [sid3Mtd, sid3Lmtd, sid3Fm]);
 
-  // Gap driver summary
-  const totalMtdRev = revByBrand.reduce((s, r) => s + r.MTD, 0);
-  const totalLmtdRev = revByBrand.reduce((s, r) => s + r.LMTD, 0);
-  const totalRevGap = totalMtdRev - totalLmtdRev;
-
-  const totalMtdVlr = vlrByBranch.reduce((s, r) => s + r.MTD, 0);
-  const totalLmtdVlr = vlrByBranch.reduce((s, r) => s + r.LMTD, 0);
+  const iohMap = useMemo((): Record<string, BrandMetrics> => {
+    const fields = ["revPrepaid", "revBase", "revAcqM0", "revOrganic", "revTrade", "revNonTrade"] as const;
+    const map: Record<string, BrandMetrics> = {};
+    for (const f of fields) {
+      map[f] = { mtd: iohMtd[f], lmtd: iohLmtd[f], lastFm: iohFm[f] };
+    }
+    return map;
+  }, [iohMtd, iohLmtd, iohFm]);
 
   const isLoading = fmQuery.isLoading || mtdQuery.isLoading;
 
-  const GapBar = ({ items, valueKey = "gap" }: { items: any[]; valueKey?: string }) => (
-    <ResponsiveContainer width="100%" height={Math.max(200, items.length * 32)}>
-      <BarChart
-        data={items}
-        layout="vertical"
-        margin={{ top: 5, right: 80, left: 120, bottom: 5 }}
-      >
-        <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.25 0.03 250)" horizontal={false} />
-        <XAxis
-          type="number"
-          tick={{ fontSize: 10, fill: "oklch(0.60 0.02 250)" }}
-          axisLine={false}
-          tickLine={false}
-          tickFormatter={(v) => formatNumber(v / 1e9, 1)}
-        />
-        <YAxis
-          type="category"
-          dataKey="name"
-          tick={{ fontSize: 10, fill: "oklch(0.75 0.02 250)" }}
-          axisLine={false}
-          tickLine={false}
-          width={115}
-        />
-        <Tooltip
-          contentStyle={{
-            background: "oklch(0.14 0.022 250)",
-            border: "1px solid oklch(0.25 0.03 250)",
-            borderRadius: "8px",
-            fontSize: "11px",
-          }}
-          formatter={(v: any) => [`${formatNumber(v / 1e9, 2)} Bn IDR`, "Gap"]}
-        />
-        <ReferenceLine x={0} stroke="oklch(0.40 0.04 250)" />
-        <Bar dataKey={valueKey} name="Gap" radius={[0, 3, 3, 0]} maxBarSize={20}>
-          {items.map((entry, i) => (
-            <Cell key={i} fill={entry[valueKey] >= 0 ? "oklch(0.68 0.18 145)" : "oklch(0.60 0.20 25)"} />
-          ))}
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
-  );
+  // ─── Summary box data ─────────────────────────────────────────────────────
+  const totalMtd = normalizeVoucher ? iohMtd.revPrepaid - voucherTotal : iohMtd.revPrepaid;
+  const totalLmtd = iohLmtd.revPrepaid;
+  const totalGap = totalMtd - totalLmtd;
+  const totalGrowth = totalLmtd !== 0 ? (totalGap / Math.abs(totalLmtd)) * 100 : 0;
+
+  const baseGap = iohMtd.revBase - iohLmtd.revBase;
+  const baseGrowth = iohLmtd.revBase !== 0 ? (baseGap / Math.abs(iohLmtd.revBase)) * 100 : 0;
+
+  const acqGap = iohMtd.revAcqM0 - iohLmtd.revAcqM0;
+  const acqGrowth = iohLmtd.revAcqM0 !== 0 ? (acqGap / Math.abs(iohLmtd.revAcqM0)) * 100 : 0;
+
+  const orgGap = iohMtd.revOrganic - iohLmtd.revOrganic;
+  const orgGrowth = iohLmtd.revOrganic !== 0 ? (orgGap / Math.abs(iohLmtd.revOrganic)) * 100 : 0;
+
+  const tradeGap = iohMtd.revTrade - iohLmtd.revTrade;
+  const tradeGrowth = iohLmtd.revTrade !== 0 ? (tradeGap / Math.abs(iohLmtd.revTrade)) * 100 : 0;
+
+  const ntGap = iohMtd.revNonTrade - iohLmtd.revNonTrade;
+  const ntGrowth = iohLmtd.revNonTrade !== 0 ? (ntGap / Math.abs(iohLmtd.revNonTrade)) * 100 : 0;
+
+  // ─── Period label helpers ─────────────────────────────────────────────────
+  function periodLabel(ym: string): string {
+    if (!ym) return "—";
+    const y = ym.slice(0, 4);
+    const m = parseInt(ym.slice(4, 6), 10);
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    return `${months[m - 1] ?? m} ${y}`;
+  }
 
   return (
     <div className="p-6 space-y-6 fade-in">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="section-header mb-0">
           <div>
-            <h1 className="text-xl font-bold text-foreground">ANOVA Revenue Analysis</h1>
+            <h1 className="text-xl font-bold text-foreground">Revenue Gap Analysis</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Variance analysis — identify missing revenue drivers
+              MTD vs LMTD variance by revenue stream and channel
+              {latestMtd && (
+                <span className="ml-2 text-xs text-amber-400/80">
+                  · MTD: {periodLabel(latestMtd)} · LMTD: {periodLabel(prevMtd)} · Last FM: {periodLabel(latestFm)}
+                </span>
+              )}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <Switch
-              id="normalize"
-              checked={filter.normalizeVoucher}
-              onCheckedChange={(v) => setNormalizeVoucher(v)}
-            />
-            <Label htmlFor="normalize" className="text-xs text-muted-foreground cursor-pointer">
-              Normalize (excl. Voucher Game)
-            </Label>
-          </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Switch
+            id="normalize"
+            checked={filter.normalizeVoucher}
+            onCheckedChange={(v) => setNormalizeVoucher(v)}
+          />
+          <Label htmlFor="normalize" className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
+            Normalize (excl. Voucher Game)
+          </Label>
         </div>
       </div>
 
       <GlobalFilterBar />
 
-      {/* Gap Driver Summary */}
-      {!isLoading && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <GapDriverCard
-            title="Revenue Gap"
-            items={[
-              { label: "MTD Revenue", value: totalMtdRev, unit: "IDR", isPositive: undefined },
-              { label: "LMTD Revenue", value: totalLmtdRev, unit: "IDR", isPositive: undefined },
-              { label: "GAP", value: totalRevGap, unit: "IDR", isPositive: totalRevGap >= 0 },
-            ]}
-          />
-          <GapDriverCard
-            title="VLR Gap"
-            items={[
-              { label: "MTD VLR", value: totalMtdVlr, unit: "K", isPositive: undefined },
-              { label: "LMTD VLR", value: totalLmtdVlr, unit: "K", isPositive: undefined },
-              { label: "GAP", value: totalMtdVlr - totalLmtdVlr, unit: "K", isPositive: totalMtdVlr >= totalLmtdVlr },
-            ]}
-          />
-          <GapDriverCard
-            title="Acquisition Gap"
-            items={[
-              { label: "MTD Acq Rev", value: revByStream.find((r) => r.name === "Acquisition")?.MTD ?? 0, unit: "IDR", isPositive: undefined },
-              { label: "LMTD Acq Rev", value: revByStream.find((r) => r.name === "Acquisition")?.LMTD ?? 0, unit: "IDR", isPositive: undefined },
-              { label: "GAP", value: revByStream.find((r) => r.name === "Acquisition")?.gap ?? 0, unit: "IDR", isPositive: (revByStream.find((r) => r.name === "Acquisition")?.gap ?? 0) >= 0 },
-            ]}
-          />
-          <GapDriverCard
-            title="Base Revenue Gap"
-            items={[
-              { label: "MTD Base Rev", value: revByStream.find((r) => r.name === "Base")?.MTD ?? 0, unit: "IDR", isPositive: undefined },
-              { label: "LMTD Base Rev", value: revByStream.find((r) => r.name === "Base")?.LMTD ?? 0, unit: "IDR", isPositive: undefined },
-              { label: "GAP", value: revByStream.find((r) => r.name === "Base")?.gap ?? 0, unit: "IDR", isPositive: (revByStream.find((r) => r.name === "Base")?.gap ?? 0) >= 0 },
-            ]}
-          />
-        </div>
-      )}
-
-      {/* Waterfall Chart */}
-      {!isLoading && (
-        <div className="chart-container">
-          <div className="section-header mb-4">
-            <h3 className="text-sm font-semibold text-foreground">
-              Revenue Bridge — LMTD to MTD
-              {filter.normalizeVoucher && (
-                <span className="ml-2 text-xs text-muted-foreground">(excl. Voucher Game)</span>
-              )}
-            </h3>
-          </div>
-          <WaterfallChart data={waterfallData} />
-        </div>
-      )}
-
-      {/* Analysis Tabs */}
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
-        <TabsList className="bg-secondary">
-          <TabsTrigger value="brand" className="text-xs">By Brand</TabsTrigger>
-          <TabsTrigger value="branch" className="text-xs">By Branch</TabsTrigger>
-          <TabsTrigger value="channel" className="text-xs">By Channel</TabsTrigger>
-          <TabsTrigger value="stream" className="text-xs">By Stream</TabsTrigger>
-          <TabsTrigger value="vlr" className="text-xs">VLR by Branch</TabsTrigger>
-        </TabsList>
-      </Tabs>
-
+      {/* ── Loading skeleton ────────────────────────────────────────────────── */}
       {isLoading && (
-        <div className="chart-container h-64">
-          <div className="skeleton h-full w-full" />
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="kpi-card h-28 skeleton" />
+            ))}
+          </div>
+          <div className="chart-container h-64 skeleton" />
         </div>
       )}
 
+      {/* ── Summary boxes ───────────────────────────────────────────────────── */}
       {!isLoading && (
-        <div className="chart-container">
-          {activeTab === "brand" && (
-            <>
-              <div className="section-header mb-4">
-                <h3 className="text-sm font-semibold text-foreground">Revenue Gap by Brand</h3>
-              </div>
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={revByBrand} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.25 0.03 250)" vertical={false} />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "oklch(0.60 0.02 250)" }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: "oklch(0.60 0.02 250)" }} axisLine={false} tickLine={false} width={60} tickFormatter={(v) => formatNumber(v / 1e9, 1)} />
-                  <Tooltip contentStyle={{ background: "oklch(0.14 0.022 250)", border: "1px solid oklch(0.25 0.03 250)", borderRadius: "8px", fontSize: "11px" }} formatter={(v: any) => [`${formatNumber(v / 1e9, 2)} Bn IDR`]} />
-                  <Legend wrapperStyle={{ fontSize: "11px" }} />
-                  <ReferenceLine y={0} stroke="oklch(0.40 0.04 250)" />
-                  <Bar dataKey="MTD" name="MTD" radius={[3, 3, 0, 0]} maxBarSize={40}>
-                    {revByBrand.map((entry, i) => (
-                      <Cell key={i} fill={BRAND_COLORS[entry.name] ?? "oklch(0.78 0.16 75)"} />
-                    ))}
-                  </Bar>
-                  <Bar dataKey="LMTD" name="LMTD" fill="oklch(0.35 0.03 250)" radius={[3, 3, 0, 0]} maxBarSize={40} />
-                </BarChart>
-              </ResponsiveContainer>
-              <div className="mt-4 overflow-x-auto">
-                <table className="w-full text-xs data-table">
-                  <thead>
-                    <tr>
-                      <th className="text-left py-2 px-3 rounded-l-md">Brand</th>
-                      <th className="text-right py-2 px-3">MTD (Bn)</th>
-                      <th className="text-right py-2 px-3">LMTD (Bn)</th>
-                      <th className="text-right py-2 px-3">GAP (Bn)</th>
-                      <th className="text-right py-2 px-3 rounded-r-md">Growth %</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {revByBrand.map((r, i) => (
-                      <tr key={i} className="border-t border-border/30 hover:bg-accent/20">
-                        <td className="py-2 px-3 font-medium">
-                          <span className={`px-2 py-0.5 rounded text-xs ${r.name === "IM3" ? "badge-im3" : "badge-3id"}`}>{r.name}</span>
-                        </td>
-                        <td className="py-2 px-3 text-right">{formatNumber(r.MTD / 1e9, 2)}</td>
-                        <td className="py-2 px-3 text-right text-muted-foreground">{formatNumber(r.LMTD / 1e9, 2)}</td>
-                        <td className={`py-2 px-3 text-right font-semibold ${r.gap >= 0 ? "value-positive" : "value-negative"}`}>
-                          {r.gap >= 0 ? "+" : ""}{formatNumber(r.gap / 1e9, 2)}
-                        </td>
-                        <td className={`py-2 px-3 text-right ${r.growth >= 0 ? "value-positive" : "value-negative"}`}>
-                          {r.growth >= 0 ? "+" : ""}{r.growth.toFixed(1)}%
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          <SummaryBox
+            label="Total Revenue"
+            sublabel={normalizeVoucher ? "excl. Voucher Game" : undefined}
+            mtd={totalMtd}
+            lmtd={totalLmtd}
+            gap={totalGap}
+            growth={totalGrowth}
+            accentColor={BRAND_COLORS["IOH"]}
+          />
+          <SummaryBox
+            label="Base Revenue"
+            mtd={iohMtd.revBase}
+            lmtd={iohLmtd.revBase}
+            gap={baseGap}
+            growth={baseGrowth}
+            accentColor="oklch(0.65 0.18 220)"
+          />
+          <SummaryBox
+            label="Acquisition Revenue"
+            mtd={iohMtd.revAcqM0}
+            lmtd={iohLmtd.revAcqM0}
+            gap={acqGap}
+            growth={acqGrowth}
+            accentColor="oklch(0.78 0.16 75)"
+          />
+          <SummaryBox
+            label="Organic Channel"
+            mtd={iohMtd.revOrganic}
+            lmtd={iohLmtd.revOrganic}
+            gap={orgGap}
+            growth={orgGrowth}
+            accentColor="oklch(0.72 0.18 160)"
+          />
+          <SummaryBox
+            label="Trade Channel"
+            mtd={iohMtd.revTrade}
+            lmtd={iohLmtd.revTrade}
+            gap={tradeGap}
+            growth={tradeGrowth}
+            accentColor="oklch(0.70 0.18 280)"
+          />
+          <SummaryBox
+            label="Non-Trade Channel"
+            mtd={iohMtd.revNonTrade}
+            lmtd={iohLmtd.revNonTrade}
+            gap={ntGap}
+            growth={ntGrowth}
+            accentColor="oklch(0.68 0.20 340)"
+          />
+        </div>
+      )}
 
-          {activeTab === "branch" && (
-            <>
-              <div className="section-header mb-4">
-                <h3 className="text-sm font-semibold text-foreground">Revenue Gap by Branch (MTD vs LMTD)</h3>
-              </div>
-              <GapBar items={revByBranch} />
-              <div className="mt-4 overflow-x-auto">
-                <table className="w-full text-xs data-table">
-                  <thead>
-                    <tr>
-                      <th className="text-left py-2 px-3 rounded-l-md">Branch</th>
-                      <th className="text-right py-2 px-3">MTD (Bn)</th>
-                      <th className="text-right py-2 px-3">LMTD (Bn)</th>
-                      <th className="text-right py-2 px-3">GAP (Bn)</th>
-                      <th className="text-right py-2 px-3 rounded-r-md">Growth %</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[...revByBranch].sort((a, b) => a.gap - b.gap).map((r, i) => (
-                      <tr key={i} className="border-t border-border/30 hover:bg-accent/20">
-                        <td className="py-2 px-3 font-medium text-foreground">{r.name}</td>
-                        <td className="py-2 px-3 text-right">{formatNumber(r.MTD / 1e9, 2)}</td>
-                        <td className="py-2 px-3 text-right text-muted-foreground">{formatNumber(r.LMTD / 1e9, 2)}</td>
-                        <td className={`py-2 px-3 text-right font-semibold ${r.gap >= 0 ? "value-positive" : "value-negative"}`}>
-                          {r.gap >= 0 ? "+" : ""}{formatNumber(r.gap / 1e9, 2)}
-                        </td>
-                        <td className={`py-2 px-3 text-right ${r.growth >= 0 ? "value-positive" : "value-negative"}`}>
-                          {r.growth >= 0 ? "+" : ""}{r.growth.toFixed(1)}%
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
-
-          {activeTab === "channel" && (
-            <>
-              <div className="section-header mb-4">
-                <h3 className="text-sm font-semibold text-foreground">Revenue Gap by Channel</h3>
-              </div>
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={revByChannel} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.25 0.03 250)" vertical={false} />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "oklch(0.60 0.02 250)" }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: "oklch(0.60 0.02 250)" }} axisLine={false} tickLine={false} width={60} tickFormatter={(v) => formatNumber(v / 1e9, 1)} />
-                  <Tooltip contentStyle={{ background: "oklch(0.14 0.022 250)", border: "1px solid oklch(0.25 0.03 250)", borderRadius: "8px", fontSize: "11px" }} formatter={(v: any) => [`${formatNumber(v / 1e9, 2)} Bn IDR`]} />
-                  <Legend wrapperStyle={{ fontSize: "11px" }} />
-                  <ReferenceLine y={0} stroke="oklch(0.40 0.04 250)" />
-                  <Bar dataKey="MTD" name="MTD" fill="oklch(0.78 0.16 75)" radius={[3, 3, 0, 0]} maxBarSize={40} />
-                  <Bar dataKey="LMTD" name="LMTD" fill="oklch(0.35 0.03 250)" radius={[3, 3, 0, 0]} maxBarSize={40} />
-                </BarChart>
-              </ResponsiveContainer>
-            </>
-          )}
-
-          {activeTab === "stream" && (
-            <>
-              <div className="section-header mb-4">
-                <h3 className="text-sm font-semibold text-foreground">Revenue Gap by Stream (Acquisition vs Base)</h3>
-              </div>
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={revByStream} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.25 0.03 250)" vertical={false} />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "oklch(0.60 0.02 250)" }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: "oklch(0.60 0.02 250)" }} axisLine={false} tickLine={false} width={60} tickFormatter={(v) => formatNumber(v / 1e9, 1)} />
-                  <Tooltip contentStyle={{ background: "oklch(0.14 0.022 250)", border: "1px solid oklch(0.25 0.03 250)", borderRadius: "8px", fontSize: "11px" }} formatter={(v: any) => [`${formatNumber(v / 1e9, 2)} Bn IDR`]} />
-                  <Legend wrapperStyle={{ fontSize: "11px" }} />
-                  <ReferenceLine y={0} stroke="oklch(0.40 0.04 250)" />
-                  <Bar dataKey="MTD" name="MTD" fill="oklch(0.65 0.18 220)" radius={[3, 3, 0, 0]} maxBarSize={60} />
-                  <Bar dataKey="LMTD" name="LMTD" fill="oklch(0.35 0.03 250)" radius={[3, 3, 0, 0]} maxBarSize={60} />
-                </BarChart>
-              </ResponsiveContainer>
-            </>
-          )}
-
-          {activeTab === "vlr" && (
-            <>
-              <div className="section-header mb-4">
-                <h3 className="text-sm font-semibold text-foreground">VLR Gap by Branch (MTD vs LMTD)</h3>
-              </div>
-              <ResponsiveContainer width="100%" height={Math.max(200, vlrByBranch.length * 32)}>
-                <BarChart
-                  data={vlrByBranch}
-                  layout="vertical"
-                  margin={{ top: 5, right: 80, left: 120, bottom: 5 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.25 0.03 250)" horizontal={false} />
-                  <XAxis type="number" tick={{ fontSize: 10, fill: "oklch(0.60 0.02 250)" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v.toFixed(0)}K`} />
-                  <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: "oklch(0.75 0.02 250)" }} axisLine={false} tickLine={false} width={115} />
-                  <Tooltip contentStyle={{ background: "oklch(0.14 0.022 250)", border: "1px solid oklch(0.25 0.03 250)", borderRadius: "8px", fontSize: "11px" }} formatter={(v: any) => [`${v.toFixed(1)}K`, "VLR"]} />
-                  <Legend wrapperStyle={{ fontSize: "11px" }} />
-                  <ReferenceLine x={0} stroke="oklch(0.40 0.04 250)" />
-                  <Bar dataKey="MTD" name="MTD" fill="oklch(0.70 0.18 160)" radius={[0, 3, 3, 0]} maxBarSize={16} />
-                  <Bar dataKey="LMTD" name="LMTD" fill="oklch(0.35 0.03 250)" radius={[0, 3, 3, 0]} maxBarSize={16} />
-                </BarChart>
-              </ResponsiveContainer>
-            </>
+      {/* ── Voucher Game info banner ─────────────────────────────────────────── */}
+      {!isLoading && voucherTotal !== 0 && (
+        <div
+          className={`flex items-center justify-between px-4 py-2.5 rounded-lg border text-xs transition-all ${
+            normalizeVoucher
+              ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
+              : "border-border/30 bg-accent/5 text-muted-foreground"
+          }`}
+        >
+          <span>
+            <span className="font-semibold">Voucher Game Effect:</span>{" "}
+            {fmtRev(voucherTotal)} IDR
+            {" · "}IM3: {fmtRev(voucherIm3)} · 3ID: {fmtRev(voucher3id)}
+          </span>
+          {normalizeVoucher && (
+            <span className="font-semibold text-amber-400">
+              ✓ Subtracted from Total Revenue
+            </span>
           )}
         </div>
+      )}
+
+      {/* ── IOH Performance Table ────────────────────────────────────────────── */}
+      {!isLoading && (
+        <PerformanceTable
+          rows={iohRows}
+          title={`IOH Revenue Gap — ${periodLabel(latestMtd)} MTD vs ${periodLabel(prevMtd)} LMTD${normalizeVoucher ? " (Voucher Normalized)" : ""}`}
+        />
+      )}
+
+      {/* ── Brand Comparison Table ───────────────────────────────────────────── */}
+      {!isLoading && (
+        <BrandPerformanceTable
+          im3={im3Map}
+          sid={sid3Map}
+          ioh={iohMap}
+          normalizeVoucher={normalizeVoucher}
+          voucherIm3={voucherIm3}
+          voucher3id={voucher3id}
+        />
       )}
     </div>
   );
