@@ -6,7 +6,6 @@ import {
   monthLabel,
   TENURE_COLORS,
   SEGMENT_COLORS,
-  BRAND_COLORS,
   formatNumber,
   calcGrowth,
 } from "@/lib/kpiUtils";
@@ -86,13 +85,20 @@ export default function VLRAnalysis() {
     // area-level summary rows have kabkotNm=null and kecamatanNm=null
     // Use area-level rows (kabkotNm=null, kecamatanNm=null) for overall trend
     // If no area-level rows, fall back to kabkot=Total rows (summed across kabkots)
+    const isNull = (v: string | null | undefined) => !v || v === 'NULL' || v === 'null';
     let totalRows = vlrQuery.data.filter(
-      (r) => !r.kecamatanNm && !r.kabkotNm
+      (r) => isNull(r.kecamatanNm) && isNull(r.kabkotNm)
     );
     if (totalRows.length === 0) {
       // Fall back: use kabkotNm='Total' rows and sum across kabkots
       totalRows = vlrQuery.data.filter(
-        (r) => r.kabkotNm === 'Total' && !r.kecamatanNm
+        (r) => (r.kabkotNm === 'Total') && isNull(r.kecamatanNm)
+      );
+    }
+    if (totalRows.length === 0) {
+      // Last resort: sum all kecamatan rows (exclude 'Total' kabkot to avoid double-count)
+      totalRows = vlrQuery.data.filter(
+        (r) => r.kabkotNm !== 'Total' && !isNull(r.kabkotNm) && !isNull(r.kecamatanNm)
       );
     }
     const map = new Map<string, Record<string, any>>();
@@ -252,104 +258,121 @@ export default function VLRAnalysis() {
       )}
 
       {/* ─── VLR Tenure Analysis ─────────────────────────────────────────── */}
-      {!isLoading && activeTab === "tenure" && (
-        <div className="space-y-6">
-          {/* Stacked Area Chart */}
-          <div className="chart-container">
+      {!isLoading && activeTab === "tenure" && (() => {
+        if (vlrTrendData.length === 0) {
+          return (
+            <div className="flex items-center justify-center h-64 text-muted-foreground">
+              <div className="text-center">
+                <Wifi className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                <p className="text-sm">No VLR data available</p>
+              </div>
+            </div>
+          );
+        }
+        const latest = vlrTrendData[vlrTrendData.length - 1];
+        const prev   = vlrTrendData[vlrTrendData.length - 2];
+        const totalMtd  = TENURE_GROUPS.reduce((s, tg) => s + (Number(latest?.[tg] ?? 0)), 0);
+        const totalLmtd = TENURE_GROUPS.reduce((s, tg) => s + (Number(prev?.[tg]   ?? 0)), 0);
+        const tableRows = TENURE_GROUPS.map((tg) => {
+          const mtd  = Number(latest?.[tg] ?? 0) * 1000;
+          const lmtd = Number(prev?.[tg]   ?? 0) * 1000;
+          const gap  = mtd - lmtd;
+          const growth = lmtd !== 0 ? (gap / Math.abs(lmtd)) * 100 : 0;
+          const mixMtd  = totalMtd  !== 0 ? (Number(latest?.[tg] ?? 0) / totalMtd)  * 100 : 0;
+          const mixLmtd = totalLmtd !== 0 ? (Number(prev?.[tg]   ?? 0) / totalLmtd) * 100 : 0;
+          const mixShift = mixMtd - mixLmtd;
+          return { tg, mtd, lmtd, gap, growth, mixMtd, mixLmtd, mixShift };
+        });
+        const totMtdSubs  = totalMtd  * 1000;
+        const totLmtdSubs = totalLmtd * 1000;
+        const totGap   = totMtdSubs - totLmtdSubs;
+        const totGrowth = totLmtdSubs !== 0 ? (totGap / Math.abs(totLmtdSubs)) * 100 : 0;
+
+        return (
+          <div className="chart-container overflow-x-auto">
             <div className="section-header mb-4">
               <h3 className="text-sm font-semibold text-foreground">
                 VLR Daily Average by Tenure Group — {selectedBrandVlr}
               </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                MTD vs LMTD · values in subscribers · Mix % = share of total VLR
+              </p>
             </div>
-            {vlrTrendData.length === 0 ? (
-              <div className="flex items-center justify-center h-64 text-muted-foreground">
-                <div className="text-center">
-                  <Wifi className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                  <p className="text-sm">No VLR data available</p>
-                </div>
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height={340}>
-                <AreaChart data={vlrTrendData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-                  <defs>
-                    {TENURE_GROUPS.map((tg) => (
-                      <linearGradient key={tg} id={`grad-${tg.replace(/[^a-z0-9]/gi, "")}`} x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={TENURE_COLORS[tg]} stopOpacity={0.3} />
-                        <stop offset="95%" stopColor={TENURE_COLORS[tg]} stopOpacity={0.02} />
-                      </linearGradient>
-                    ))}
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.25 0.03 250)" vertical={false} />
-                  <XAxis
-                    dataKey="yearMonth"
-                    tickFormatter={monthLabel}
-                    tick={{ fontSize: 11, fill: "oklch(0.60 0.02 250)" }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 11, fill: "oklch(0.60 0.02 250)" }}
-                    axisLine={false}
-                    tickLine={false}
-                    width={50}
-                    tickFormatter={(v) => `${v.toFixed(0)}K`}
-                  />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Legend wrapperStyle={{ fontSize: "10px", paddingTop: "12px" }} />
-                  {TENURE_GROUPS.map((tg) => (
-                    <Area
-                      key={tg}
-                      type="monotone"
-                      dataKey={tg}
-                      name={tg}
-                      stroke={TENURE_COLORS[tg]}
-                      fill={`url(#grad-${tg.replace(/[^a-z0-9]/gi, "")})`}
-                      strokeWidth={1.5}
-                      dot={false}
-                      stackId="1"
-                    />
-                  ))}
-                </AreaChart>
-              </ResponsiveContainer>
-            )}
+            <table className="w-full text-xs data-table min-w-[780px]">
+              <thead>
+                <tr>
+                  <th className="text-left py-2.5 px-4 rounded-l-md w-[160px]">Tenure Group</th>
+                  <th className="text-right py-2.5 px-3">MTD (Subs)</th>
+                  <th className="text-right py-2.5 px-3">Mix MTD %</th>
+                  <th className="text-right py-2.5 px-3">LMTD (Subs)</th>
+                  <th className="text-right py-2.5 px-3">Mix LMTD %</th>
+                  <th className="text-right py-2.5 px-3">Mix Shift</th>
+                  <th className="text-right py-2.5 px-3">GAP (MTD−LMTD)</th>
+                  <th className="text-right py-2.5 px-4 rounded-r-md">Growth %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tableRows.map((r) => (
+                  <tr key={r.tg} className="border-t border-border/20 hover:bg-accent/10 transition-colors">
+                    <td className="py-2.5 px-4">
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: TENURE_COLORS[r.tg] }} />
+                        <span className="text-foreground/90">{r.tg}</span>
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-medium">
+                      {formatNumber(r.mtd / 1000, 1)}K
+                    </td>
+                    <td className="py-2.5 px-3 text-right text-amber-400 font-semibold">
+                      {r.mixMtd.toFixed(1)}%
+                    </td>
+                    <td className="py-2.5 px-3 text-right text-muted-foreground">
+                      {formatNumber(r.lmtd / 1000, 1)}K
+                    </td>
+                    <td className="py-2.5 px-3 text-right text-muted-foreground">
+                      {r.mixLmtd.toFixed(1)}%
+                    </td>
+                    <td className={`py-2.5 px-3 text-right font-semibold text-xs ${
+                      r.mixShift > 0.1 ? "value-positive" : r.mixShift < -0.1 ? "value-negative" : "text-muted-foreground"
+                    }`}>
+                      {r.mixShift >= 0 ? "+" : ""}{r.mixShift.toFixed(1)} pp
+                    </td>
+                    <td className={`py-2.5 px-3 text-right font-semibold ${
+                      r.gap >= 0 ? "value-positive" : "value-negative"
+                    }`}>
+                      {r.gap >= 0 ? "+" : ""}{formatNumber(r.gap / 1000, 1)}K
+                    </td>
+                    <td className={`py-2.5 px-4 text-right ${
+                      r.growth >= 0 ? "value-positive" : "value-negative"
+                    }`}>
+                      {r.growth >= 0 ? "↗" : "↘"} {r.growth >= 0 ? "+" : ""}{r.growth.toFixed(1)}%
+                    </td>
+                  </tr>
+                ))}
+                {/* Total row */}
+                <tr className="border-t-2 border-border/40 bg-accent/5 font-semibold">
+                  <td className="py-2.5 px-4 text-foreground">Total VLR</td>
+                  <td className="py-2.5 px-3 text-right">{formatNumber(totMtdSubs / 1000, 1)}K</td>
+                  <td className="py-2.5 px-3 text-right text-amber-400">100.0%</td>
+                  <td className="py-2.5 px-3 text-right text-muted-foreground">{formatNumber(totLmtdSubs / 1000, 1)}K</td>
+                  <td className="py-2.5 px-3 text-right text-muted-foreground">100.0%</td>
+                  <td className="py-2.5 px-3 text-right text-muted-foreground">—</td>
+                  <td className={`py-2.5 px-3 text-right ${
+                    totGap >= 0 ? "value-positive" : "value-negative"
+                  }`}>
+                    {totGap >= 0 ? "+" : ""}{formatNumber(totGap / 1000, 1)}K
+                  </td>
+                  <td className={`py-2.5 px-4 text-right ${
+                    totGrowth >= 0 ? "value-positive" : "value-negative"
+                  }`}>
+                    {totGrowth >= 0 ? "↗" : "↘"} {totGrowth >= 0 ? "+" : ""}{totGrowth.toFixed(1)}%
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
-
-          {/* Latest month breakdown bar */}
-          <div className="chart-container">
-            <div className="section-header mb-4">
-              <h3 className="text-sm font-semibold text-foreground">Latest Month VLR by Tenure — {selectedBrandVlr}</h3>
-            </div>
-            {vlrTrendData.length > 0 && (() => {
-              const latest = vlrTrendData[vlrTrendData.length - 1];
-              const prev = vlrTrendData[vlrTrendData.length - 2];
-              const barData = TENURE_GROUPS.map((tg) => ({
-                name: tg,
-                MTD: Number(latest?.[tg] ?? 0),
-                LMTD: Number(prev?.[tg] ?? 0),
-                gap: Number(latest?.[tg] ?? 0) - Number(prev?.[tg] ?? 0),
-              }));
-              return (
-                <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={barData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.25 0.03 250)" vertical={false} />
-                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: "oklch(0.60 0.02 250)" }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10, fill: "oklch(0.60 0.02 250)" }} axisLine={false} tickLine={false} width={50} tickFormatter={(v) => `${v.toFixed(0)}K`} />
-                    <Tooltip contentStyle={{ background: "oklch(0.14 0.022 250)", border: "1px solid oklch(0.25 0.03 250)", borderRadius: "8px", fontSize: "11px" }} />
-                    <Legend wrapperStyle={{ fontSize: "11px" }} />
-                    <ReferenceLine y={0} stroke="oklch(0.40 0.04 250)" />
-                    <Bar dataKey="MTD" name="MTD" radius={[3, 3, 0, 0]} maxBarSize={30}>
-                      {barData.map((entry, i) => (
-                        <Cell key={i} fill={TENURE_COLORS[entry.name] ?? "#888"} />
-                      ))}
-                    </Bar>
-                    <Bar dataKey="LMTD" name="LMTD" fill="oklch(0.35 0.03 250)" radius={[3, 3, 0, 0]} maxBarSize={30} />
-                  </BarChart>
-                </ResponsiveContainer>
-              );
-            })()}
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ─── Subscriber Segments ─────────────────────────────────────────── */}
       {!isLoading && activeTab === "segments" && (

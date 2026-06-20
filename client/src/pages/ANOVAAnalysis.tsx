@@ -106,20 +106,33 @@ function SummaryBox({
 }
 
 // ─── Performance Table ────────────────────────────────────────────────────────
-function PerformanceTable({ rows, title }: { rows: RevRow[]; title: string }) {
+function PerformanceTable({
+  rows,
+  title,
+  totalMtd,
+  totalLmtd,
+}: {
+  rows: RevRow[];
+  title: string;
+  totalMtd: number;
+  totalLmtd: number;
+}) {
   return (
     <div className="chart-container overflow-x-auto">
       <div className="section-header mb-4">
         <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+        <p className="text-xs text-muted-foreground mt-0.5">Mix % = component share of Total Revenue</p>
       </div>
-      <table className="w-full text-xs data-table min-w-[700px]">
+      <table className="w-full text-xs data-table min-w-[860px]">
         <thead>
           <tr>
             <th className="text-left py-2.5 px-4 rounded-l-md w-[220px]">Revenue Component</th>
-            <th className="text-right py-2.5 px-4">MTD (Bn IDR)</th>
-            <th className="text-right py-2.5 px-4">LMTD (Bn IDR)</th>
-            <th className="text-right py-2.5 px-4">Last FM (Bn IDR)</th>
-            <th className="text-right py-2.5 px-4">GAP (MTD−LMTD)</th>
+            <th className="text-right py-2.5 px-3">MTD (Bn IDR)</th>
+            <th className="text-right py-2.5 px-3 text-amber-400">Mix MTD</th>
+            <th className="text-right py-2.5 px-3">LMTD (Bn IDR)</th>
+            <th className="text-right py-2.5 px-3 text-muted-foreground">Mix LMTD</th>
+            <th className="text-right py-2.5 px-3">Last FM (Bn IDR)</th>
+            <th className="text-right py-2.5 px-3">GAP (MTD−LMTD)</th>
             <th className="text-right py-2.5 px-4 rounded-r-md">Growth %</th>
           </tr>
         </thead>
@@ -128,12 +141,15 @@ function PerformanceTable({ rows, title }: { rows: RevRow[]; title: string }) {
             if (row.isSeparator) {
               return (
                 <tr key={i}>
-                  <td colSpan={6} className="py-1 px-4">
+                  <td colSpan={8} className="py-1 px-4">
                     <div className="border-t border-border/20" />
                   </td>
                 </tr>
               );
             }
+            const mixMtd  = totalMtd  > 0 && !row.isVoucherRow ? (row.mtd  / totalMtd)  * 100 : null;
+            const mixLmtd = totalLmtd > 0 && !row.isVoucherRow ? (row.lmtd / totalLmtd) * 100 : null;
+            const mixShift = mixMtd !== null && mixLmtd !== null ? mixMtd - mixLmtd : null;
             return (
               <tr
                 key={i}
@@ -149,16 +165,29 @@ function PerformanceTable({ rows, title }: { rows: RevRow[]; title: string }) {
                     <span className="ml-1.5 text-[10px] text-muted-foreground">{row.sublabel}</span>
                   )}
                 </td>
-                <td className="py-2.5 px-4 text-right font-medium">
+                <td className="py-2.5 px-3 text-right font-medium">
                   {formatNumber(row.mtd / 1e9, 2)}
                 </td>
-                <td className="py-2.5 px-4 text-right text-muted-foreground">
+                <td className="py-2.5 px-3 text-right">
+                  {mixMtd !== null ? (
+                    <span className="font-semibold text-amber-400">{mixMtd.toFixed(1)}%</span>
+                  ) : <span className="text-muted-foreground">—</span>}
+                  {mixShift !== null && Math.abs(mixShift) >= 0.1 && (
+                    <span className={`ml-1 text-[10px] ${mixShift > 0 ? "value-positive" : "value-negative"}`}>
+                      ({mixShift > 0 ? "+" : ""}{mixShift.toFixed(1)}pp)
+                    </span>
+                  )}
+                </td>
+                <td className="py-2.5 px-3 text-right text-muted-foreground">
                   {formatNumber(row.lmtd / 1e9, 2)}
                 </td>
-                <td className="py-2.5 px-4 text-right text-muted-foreground">
+                <td className="py-2.5 px-3 text-right text-muted-foreground">
+                  {mixLmtd !== null ? `${mixLmtd.toFixed(1)}%` : "—"}
+                </td>
+                <td className="py-2.5 px-3 text-right text-muted-foreground">
                   {formatNumber(row.lastFm / 1e9, 2)}
                 </td>
-                <td className={`py-2.5 px-4 text-right font-semibold ${growthClass(row.gap)}`}>
+                <td className={`py-2.5 px-3 text-right font-semibold ${growthClass(row.gap)}`}>
                   {fmtGap(row.gap / 1e9)}
                 </td>
                 <td className={`py-2.5 px-4 text-right ${growthClass(row.growth)}`}>
@@ -654,6 +683,8 @@ export default function ANOVAAnalysis() {
         <PerformanceTable
           rows={iohRows}
           title={`IOH Revenue Gap — ${periodLabel(latestMtd)} MTD vs ${periodLabel(prevMtd)} LMTD${normalizeVoucher ? " (Voucher Normalized)" : ""}`}
+          totalMtd={totalMtd}
+          totalLmtd={totalLmtd}
         />
       )}
 
