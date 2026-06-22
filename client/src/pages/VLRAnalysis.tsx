@@ -55,12 +55,17 @@ export default function VLRAnalysis() {
   const { filter, brandsArray, areasArray, kabkotsArray } = useFilter();
   const [activeTab, setActiveTab] = useState<"tenure" | "segments" | "ranking" | "map">("tenure");
   const [mapMetric, setMapMetric] = useState<"vlr" | "growth" | "gap">("vlr");
-  const [selectedBrandVlr, setSelectedBrandVlr] = useState<string>("IM3");
+  // tenureBrand drives the VLR tenure query (IM3 or 3ID only — data is per-brand)
+  const [tenureBrand, setTenureBrand] = useState<string>("IM3");
+  // mapBrand drives the map/ranking views and supports IOH (combined)
+  const [mapBrand, setMapBrand] = useState<string>("IOH");
   const [topN, setTopN] = useState(15);
+  const [kecSortField, setKecSortField] = useState<"vlrGap" | "vlrMtd" | "vlrGrowth" | "hvcGap" | "hvcMtd">("vlrGap");
+  const [kecSortDir, setKecSortDir] = useState<"asc" | "desc">("asc"); // asc = worst gap first
 
   // VLR Tenure data
   const vlrQuery = trpc.vlr.trend.useQuery({
-    brands: [selectedBrandVlr],
+    brands: [tenureBrand],
     areas: areasArray.length ? areasArray : undefined,
     kabkots: kabkotsArray.length ? kabkotsArray : undefined,
   });
@@ -165,36 +170,40 @@ export default function VLRAnalysis() {
   // ─── Kec Rank: Top/Bottom VLR ─────────────────────────────────────────────
   const kecTopBottom = useMemo(() => {
     if (!kecRankQuery.data) return { top: [], bottom: [], topHvc: [] };
-    const brand = selectedBrandVlr === "IM3" ? "im3" : "threeid";
+    const getBrandVal = (r: any, field: string) => mapBrand === "IOH"
+      ? (Number(r[`im3${field}`] ?? 0) + Number(r[`threeid${field}`] ?? 0))
+      : Number(r[`${mapBrand === "IM3" ? "im3" : "threeid"}${field}`] ?? 0);
     const sorted = [...kecRankQuery.data].sort((a, b) => {
-      const aGap = Number((a as any)[`${brand}Gap`] ?? 0);
-      const bGap = Number((b as any)[`${brand}Gap`] ?? 0);
+      const aGap = getBrandVal(a as any, "Gap");
+      const bGap = getBrandVal(b as any, "Gap");
       return bGap - aGap;
     });
     const top = sorted.slice(0, topN);
     const bottom = sorted.slice(-topN).reverse();
 
     const hvcSorted = [...kecRankQuery.data].sort((a, b) => {
-      const aGap = Number((a as any)[`${brand}HvcGap`] ?? 0);
-      const bGap = Number((b as any)[`${brand}HvcGap`] ?? 0);
+      const aGap = getBrandVal(a as any, "HvcGap");
+      const bGap = getBrandVal(b as any, "HvcGap");
       return bGap - aGap;
     });
     const topHvc = hvcSorted.slice(0, topN);
 
     return { top, bottom, topHvc };
-  }, [kecRankQuery.data, selectedBrandVlr, topN]);
+  }, [kecRankQuery.data, mapBrand, topN]);
 
   // ─── Choropleth map data: kecamatan-level VLR from kecRank ─────────────────
   const mapData = useMemo(() => {
     if (!kecRankQuery.data) return [];
-    const brand = selectedBrandVlr === "IM3" ? "im3" : "threeid";
+    const getVal = (rec: any, field: string) => mapBrand === "IOH"
+      ? (Number(rec[`im3${field}`] ?? 0) + Number(rec[`threeid${field}`] ?? 0))
+      : Number(rec[`${mapBrand === "IM3" ? "im3" : "threeid"}${field}`] ?? 0);
     return kecRankQuery.data
       .filter((r) => r.kecamatan && r.kecamatan !== "Total")
       .map((r) => {
         const rec = r as any;
-        const mtd = Number(rec[`${brand}Mtd`] ?? 0);
-        const lmtd = Number(rec[`${brand}Lmtd`] ?? 0);
-        const gap = Number(rec[`${brand}Gap`] ?? 0);
+        const mtd = getVal(rec, "Mtd");
+        const lmtd = getVal(rec, "Lmtd");
+        const gap = getVal(rec, "Gap");
         const growth = lmtd > 0 ? ((mtd - lmtd) / lmtd) * 100 : null;
         // VLR rate: compute as MTD/LMTD ratio × 100 for relative performance
         const vlrValue = lmtd > 0 ? (mtd / lmtd) * 100 : null;
@@ -207,7 +216,7 @@ export default function VLRAnalysis() {
           growth: growth,
         };
       });
-  }, [kecRankQuery.data, selectedBrandVlr, mapMetric]);
+  }, [kecRankQuery.data, mapBrand, mapMetric]);
 
   const isLoading = vlrQuery.isLoading || segmentsQuery.isLoading || kecRankQuery.isLoading;
 
@@ -224,7 +233,8 @@ export default function VLRAnalysis() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Select value={selectedBrandVlr} onValueChange={setSelectedBrandVlr}>
+          <span className="text-xs text-muted-foreground">Tenure:</span>
+          <Select value={tenureBrand} onValueChange={setTenureBrand}>
             <SelectTrigger className="h-7 w-24 text-xs bg-secondary border-border">
               <SelectValue />
             </SelectTrigger>
@@ -292,7 +302,7 @@ export default function VLRAnalysis() {
           <div className="chart-container overflow-x-auto">
             <div className="section-header mb-4">
               <h3 className="text-sm font-semibold text-foreground">
-                VLR Daily Average by Tenure Group — {selectedBrandVlr}
+                VLR Daily Average by Tenure Group — {tenureBrand}
               </h3>
               <p className="text-xs text-muted-foreground mt-0.5">
                 MTD vs LMTD · values in subscribers · Mix % = share of total VLR
@@ -476,26 +486,39 @@ export default function VLRAnalysis() {
                 {m === "vlr" ? "VLR Rate" : m === "growth" ? "MoM Growth" : "MTD vs LMTD Gap"}
               </button>
             ))}
-            <span className="text-xs text-muted-foreground ml-2">
-              Brand: <span className="font-semibold" style={{ color: selectedBrandVlr === "IM3" ? "#eab308" : "#e879f9" }}>{selectedBrandVlr}</span>
-            </span>
+            <span className="text-xs text-muted-foreground ml-2">Brand:</span>
+            {(["IM3", "3ID", "IOH"] as const).map((b) => (
+              <button
+                key={b}
+                onClick={() => setMapBrand(b)}
+                className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                  mapBrand === b
+                    ? b === "IM3" ? "bg-yellow-500 text-black" : b === "3ID" ? "bg-fuchsia-500 text-white" : "bg-blue-500 text-white"
+                    : "bg-secondary text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {b === "IOH" ? "IOH (Combined)" : b}
+              </button>
+            ))}
           </div>
 
           <div className="chart-container p-0 overflow-hidden" style={{ height: 560 }}>
             <ChoroplethMap
               data={mapData}
               metric={mapMetric === "growth" ? "growth" : mapMetric === "gap" ? "gap" : "vlr"}
-              title={`Kecamatan VLR Hotspot — ${selectedBrandVlr}`}
+              title={`Kecamatan VLR Hotspot — ${mapBrand}`}
               className="h-full"
             />
           </div>
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {["Top 5 VLR Growth", "Bottom 5 VLR Growth"].map((label) => {
-              const brand = selectedBrandVlr === "IM3" ? "im3" : "threeid";
+              const getBV = (r: any) => mapBrand === "IOH"
+                ? (Number(r.im3Gap ?? 0) + Number(r.threeidGap ?? 0))
+                : Number(r[`${mapBrand === "IM3" ? "im3" : "threeid"}Gap`] ?? 0);
               const sorted = [...(kecRankQuery.data ?? [])].sort((a, b) => {
-                const ag = Number((a as any)[`${brand}Gap`] ?? 0);
-                const bg = Number((b as any)[`${brand}Gap`] ?? 0);
+                const ag = getBV(a as any);
+                const bg = getBV(b as any);
                 return label.includes("Top") ? bg - ag : ag - bg;
               }).slice(0, 5);
               return (
@@ -504,11 +527,11 @@ export default function VLRAnalysis() {
                     label.includes("Top") ? "value-positive" : "value-negative"
                   }`}>
                     {label.includes("Top") ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                    {label} — {selectedBrandVlr}
+                    {label} — {mapBrand}
                   </h4>
                   <div className="space-y-2">
                     {sorted.map((r, i) => {
-                      const gap = Number((r as any)[`${brand}Gap`] ?? 0);
+                      const gap = getBV(r as any);
                       return (
                         <div key={i} className="flex items-center justify-between text-xs">
                           <span className="text-foreground font-medium truncate max-w-[140px]">{r.kecamatan}</span>
@@ -551,14 +574,16 @@ export default function VLRAnalysis() {
               <div className="section-header mb-4">
                 <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
                   <TrendingUp size={14} className="text-positive value-positive" />
-                  Top VLR Growth Kecamatan — {selectedBrandVlr}
+                  Top VLR Growth Kecamatan — {mapBrand}
                 </h3>
               </div>
               <ResponsiveContainer width="100%" height={Math.max(200, topN * 22)}>
                 <BarChart
                   data={kecTopBottom.top.map((r) => ({
                     name: r.kecamatan,
-                    gap: Number((r as any)[`${selectedBrandVlr === "IM3" ? "im3" : "threeid"}Gap`] ?? 0) / 1000,
+                    gap: mapBrand === "IOH"
+                      ? (Number((r as any).im3Gap ?? 0) + Number((r as any).threeidGap ?? 0)) / 1000
+                      : Number((r as any)[`${mapBrand === "IM3" ? "im3" : "threeid"}Gap`] ?? 0) / 1000,
                   }))}
                   layout="vertical"
                   margin={{ top: 5, right: 30, left: 120, bottom: 5 }}
@@ -582,14 +607,16 @@ export default function VLRAnalysis() {
               <div className="section-header mb-4">
                 <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
                   <TrendingDown size={14} className="value-negative" />
-                  Bottom VLR Growth Kecamatan — {selectedBrandVlr}
+                  Bottom VLR Growth Kecamatan — {mapBrand}
                 </h3>
               </div>
               <ResponsiveContainer width="100%" height={Math.max(200, topN * 22)}>
                 <BarChart
                   data={kecTopBottom.bottom.map((r) => ({
                     name: r.kecamatan,
-                    gap: Number((r as any)[`${selectedBrandVlr === "IM3" ? "im3" : "threeid"}Gap`] ?? 0) / 1000,
+                    gap: mapBrand === "IOH"
+                      ? (Number((r as any).im3Gap ?? 0) + Number((r as any).threeidGap ?? 0)) / 1000
+                      : Number((r as any)[`${mapBrand === "IM3" ? "im3" : "threeid"}Gap`] ?? 0) / 1000,
                   }))}
                   layout="vertical"
                   margin={{ top: 5, right: 30, left: 120, bottom: 5 }}
@@ -614,14 +641,16 @@ export default function VLRAnalysis() {
             <div className="section-header mb-4">
               <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
                 <TrendingUp size={14} className="value-positive" />
-                Top HVC Growth Kabupaten — {selectedBrandVlr}
+                Top HVC Growth Kabupaten — {mapBrand}
               </h3>
             </div>
             <ResponsiveContainer width="100%" height={Math.max(200, topN * 22)}>
               <BarChart
                 data={kecTopBottom.topHvc.map((r) => ({
                   name: `${r.kecamatan} (${r.kabkot})`,
-                  gap: Number((r as any)[`${selectedBrandVlr === "IM3" ? "im3" : "threeid"}HvcGap`] ?? 0) / 1000,
+                  gap: mapBrand === "IOH"
+                      ? (Number((r as any).im3HvcGap ?? 0) + Number((r as any).threeidHvcGap ?? 0)) / 1000
+                      : Number((r as any)[`${mapBrand === "IM3" ? "im3" : "threeid"}HvcGap`] ?? 0) / 1000,
                 }))}
                 layout="vertical"
                 margin={{ top: 5, right: 30, left: 160, bottom: 5 }}
@@ -637,6 +666,170 @@ export default function VLRAnalysis() {
           </div>
         </div>
       )}
+
+      {/* ─── Kecamatan Drill-Down Ranked Table ──────────────────────────────── */}
+      {!isLoading && kecRankQuery.data && (() => {
+        const hasKabkot = !!filter.kabkot;
+        const hasArea   = !!filter.area;
+        if (!hasKabkot && !hasArea) return (
+          <div className="chart-container">
+            <div className="flex items-center gap-2 text-muted-foreground text-xs">
+              <Users size={14} />
+              <span>Select a <strong className="text-foreground">Kabupaten</strong> or <strong className="text-foreground">Sales Area</strong> in the filter above to see the Kecamatan ranked drill-down.</span>
+            </div>
+          </div>
+        );
+
+        const getV = (r: any, field: string) => mapBrand === "IOH"
+          ? (Number(r[`im3${field}`] ?? 0) + Number(r[`threeid${field}`] ?? 0))
+          : Number(r[`${mapBrand === "IM3" ? "im3" : "threeid"}${field}`] ?? 0);
+
+        const rows = kecRankQuery.data
+          .filter((r) => r.kecamatan && r.kecamatan !== "Total")
+          .map((r) => {
+            const vlrMtd   = getV(r, "Mtd");
+            const vlrLmtd  = getV(r, "Lmtd");
+            const vlrGap   = getV(r, "Gap");
+            const hvcMtd   = getV(r, "HvcMtd");
+            const hvcLmtd  = getV(r, "HvcLmtd");
+            const hvcGap   = getV(r, "HvcGap");
+            const vlrGrowth = vlrLmtd !== 0 ? (vlrGap / Math.abs(vlrLmtd)) * 100 : 0;
+            const hvcGrowth = hvcLmtd !== 0 ? (hvcGap / Math.abs(hvcLmtd)) * 100 : 0;
+            const vlrRate   = vlrLmtd > 0 ? (vlrMtd / vlrLmtd) * 100 : null;
+            return {
+              kecamatan: r.kecamatan,
+              kabkot: r.kabkot ?? "",
+              area: r.area ?? "",
+              vlrMtd, vlrLmtd, vlrGap, vlrGrowth, vlrRate,
+              hvcMtd, hvcLmtd, hvcGap, hvcGrowth,
+            };
+          });
+
+        const sorted = [...rows].sort((a, b) => {
+          const va = a[kecSortField];
+          const vb = b[kecSortField];
+          return kecSortDir === "asc" ? (va ?? 0) - (vb ?? 0) : (vb ?? 0) - (va ?? 0);
+        });
+
+        const toggleSort = (field: typeof kecSortField) => {
+          if (kecSortField === field) setKecSortDir(d => d === "asc" ? "desc" : "asc");
+          else { setKecSortField(field); setKecSortDir("asc"); }
+        };
+        const sortIcon = (field: typeof kecSortField) =>
+          kecSortField === field ? (kecSortDir === "asc" ? " ↑" : " ↓") : " ↕";
+
+        const scopeLabel = filter.kabkot
+          ? filter.kabkot
+          : filter.area
+          ? filter.area
+          : "All";
+
+        return (
+          <div className="chart-container overflow-x-auto">
+            <div className="section-header mb-4">
+              <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Users size={14} className="text-amber-400" />
+                Kecamatan VLR Drill-Down — {scopeLabel} · {mapBrand}
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Ranked by VLR GAP (MTD − LMTD) · Click column headers to re-sort · {sorted.length} kecamatan
+              </p>
+            </div>
+            <table className="w-full text-xs data-table min-w-[860px]">
+              <thead>
+                <tr>
+                  <th className="text-left py-2.5 px-4 rounded-l-md w-8">#</th>
+                  <th className="text-left py-2.5 px-4">Kecamatan</th>
+                  <th className="text-left py-2.5 px-3">Kabupaten</th>
+                  <th
+                    className="text-right py-2.5 px-3 cursor-pointer hover:text-foreground select-none"
+                    onClick={() => toggleSort("vlrMtd")}
+                  >
+                    VLR MTD (K){sortIcon("vlrMtd")}
+                  </th>
+                  <th className="text-right py-2.5 px-3">VLR LMTD (K)</th>
+                  <th
+                    className="text-right py-2.5 px-3 cursor-pointer hover:text-foreground select-none"
+                    onClick={() => toggleSort("vlrGap")}
+                  >
+                    VLR GAP{sortIcon("vlrGap")}
+                  </th>
+                  <th
+                    className="text-right py-2.5 px-3 cursor-pointer hover:text-foreground select-none"
+                    onClick={() => toggleSort("vlrGrowth")}
+                  >
+                    Growth %{sortIcon("vlrGrowth")}
+                  </th>
+                  <th className="text-right py-2.5 px-3">VLR Rate</th>
+                  <th
+                    className="text-right py-2.5 px-3 cursor-pointer hover:text-foreground select-none"
+                    onClick={() => toggleSort("hvcMtd")}
+                  >
+                    HVC MTD (K){sortIcon("hvcMtd")}
+                  </th>
+                  <th className="text-right py-2.5 px-3">HVC LMTD (K)</th>
+                  <th
+                    className="text-right py-2.5 px-3 cursor-pointer hover:text-foreground select-none"
+                    onClick={() => toggleSort("hvcGap")}
+                  >
+                    HVC GAP{sortIcon("hvcGap")}
+                  </th>
+                  <th className="text-right py-2.5 px-4 rounded-r-md">HVC Growth %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map((r, i) => {
+                  const vlrBad = r.vlrGap < 0;
+                  const hvcBad = r.hvcGap < 0;
+                  return (
+                    <tr
+                      key={r.kecamatan}
+                      className={`border-t border-border/20 hover:bg-accent/10 transition-colors ${
+                        vlrBad && r.vlrGap < -500 ? "bg-red-950/20" : ""
+                      }`}
+                    >
+                      <td className="py-2 px-4 text-muted-foreground">{i + 1}</td>
+                      <td className="py-2 px-4 font-medium text-foreground">{r.kecamatan}</td>
+                      <td className="py-2 px-3 text-muted-foreground text-[11px]">{r.kabkot}</td>
+                      <td className="py-2 px-3 text-right font-medium">{(r.vlrMtd / 1000).toFixed(1)}K</td>
+                      <td className="py-2 px-3 text-right text-muted-foreground">{(r.vlrLmtd / 1000).toFixed(1)}K</td>
+                      <td className={`py-2 px-3 text-right font-semibold ${
+                        r.vlrGap >= 0 ? "value-positive" : "value-negative"
+                      }`}>
+                        {r.vlrGap >= 0 ? "+" : ""}{(r.vlrGap / 1000).toFixed(1)}K
+                      </td>
+                      <td className={`py-2 px-3 text-right ${
+                        r.vlrGrowth >= 0 ? "value-positive" : "value-negative"
+                      }`}>
+                        {r.vlrGrowth >= 0 ? "↗ +" : "↘ "}{r.vlrGrowth.toFixed(1)}%
+                      </td>
+                      <td className="py-2 px-3 text-right">
+                        {r.vlrRate !== null ? (
+                          <span className={r.vlrRate >= 100 ? "value-positive" : r.vlrRate >= 95 ? "text-amber-400" : "value-negative"}>
+                            {r.vlrRate.toFixed(1)}%
+                          </span>
+                        ) : "—"}
+                      </td>
+                      <td className="py-2 px-3 text-right font-medium">{(r.hvcMtd / 1000).toFixed(1)}K</td>
+                      <td className="py-2 px-3 text-right text-muted-foreground">{(r.hvcLmtd / 1000).toFixed(1)}K</td>
+                      <td className={`py-2 px-3 text-right font-semibold ${
+                        r.hvcGap >= 0 ? "value-positive" : "value-negative"
+                      }`}>
+                        {r.hvcGap >= 0 ? "+" : ""}{(r.hvcGap / 1000).toFixed(1)}K
+                      </td>
+                      <td className={`py-2 px-4 text-right ${
+                        r.hvcGrowth >= 0 ? "value-positive" : "value-negative"
+                      }`}>
+                        {r.hvcGrowth >= 0 ? "↗ +" : "↘ "}{r.hvcGrowth.toFixed(1)}%
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        );
+      })()}
     </div>
   );
 }
