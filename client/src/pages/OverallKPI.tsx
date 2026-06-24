@@ -11,6 +11,7 @@ import {
   calcGrowth,
   calcGap,
   getLMTDMonth,
+  getYoYMonths,
   BRAND_COLORS,
 } from "@/lib/kpiUtils";
 import {
@@ -36,6 +37,7 @@ function KpiCard({
   mtdValue,
   lmtdValue,
   fmValue,
+  yoyValue,
   unit,
   divisor,
 }: {
@@ -43,12 +45,15 @@ function KpiCard({
   mtdValue: number;
   lmtdValue: number;
   fmValue: number;
+  yoyValue?: number;
   unit: string;
   divisor: number;
 }) {
   const gap = calcGap(mtdValue, lmtdValue);
   const growth = calcGrowth(mtdValue, lmtdValue);
   const isPositive = gap >= 0;
+  const yoyGrowth = yoyValue != null && yoyValue !== 0 ? calcGrowth(mtdValue, yoyValue) : null;
+  const yoyIsPos = yoyGrowth != null && yoyGrowth >= 0;
 
   const fmt = (v: number) => {
     const scaled = v / divisor;
@@ -82,6 +87,16 @@ function KpiCard({
         <span>Last FM: {fmt(fmValue)}</span>
         <span>LMTD: {fmt(lmtdValue)}</span>
       </div>
+      {yoyGrowth != null && (
+        <div className="mt-1.5 pt-1.5 border-t border-border/30 flex items-center gap-2">
+          <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">YoY</span>
+          <span className={`flex items-center gap-0.5 text-xs font-semibold ${yoyIsPos ? "value-positive" : "value-negative"}`}>
+            {yoyIsPos ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+            {formatPercent(yoyGrowth)}
+          </span>
+          <span className="text-[10px] text-muted-foreground ml-auto">vs {fmt(yoyValue!)}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -140,6 +155,7 @@ function MiniKpiCard({
   field,
   mtdValue,
   lmtdValue,
+  yoyValue,
   divisor,
   unit,
   isActive,
@@ -149,6 +165,7 @@ function MiniKpiCard({
   field: string;
   mtdValue: number;
   lmtdValue: number;
+  yoyValue?: number;
   divisor: number;
   unit: string;
   isActive: boolean;
@@ -157,6 +174,8 @@ function MiniKpiCard({
   const growth = calcGrowth(mtdValue, lmtdValue);
   const gap = calcGap(mtdValue, lmtdValue);
   const isPos = gap >= 0;
+  const yoyGrowth = yoyValue != null && yoyValue !== 0 ? calcGrowth(mtdValue, yoyValue) : null;
+  const yoyIsPos = yoyGrowth != null && yoyGrowth >= 0;
 
   const fmt = (v: number) => {
     const s = v / divisor;
@@ -183,6 +202,12 @@ function MiniKpiCard({
           {formatPercent(growth)}
         </span>
         <span className="text-xs text-muted-foreground">vs LMTD</span>
+        {yoyGrowth != null && (
+          <span className={`flex items-center gap-0.5 text-[10px] font-semibold ml-auto ${yoyIsPos ? "value-positive" : "value-negative"}`}>
+            {yoyIsPos ? <TrendingUp size={9} /> : <TrendingDown size={9} />}
+            {formatPercent(yoyGrowth)} YoY
+          </span>
+        )}
       </div>
       <div className="mt-1.5 pt-1.5 border-t border-border/50 flex justify-between text-xs text-muted-foreground">
         <span>Full Month: {fmt(mtdValue)}</span>
@@ -403,6 +428,7 @@ export default function OverallKPI() {
 
   const latestMtdMonth = mtdByMonth.length > 0 ? String(mtdByMonth[mtdByMonth.length - 1]?.yearMonth ?? "") : undefined;
   const lmtdMonth = latestMtdMonth ? getLMTDMonth(latestMtdMonth) : undefined;
+  const yoyMonth = latestMtdMonth ? getYoYMonths(latestMtdMonth)[0] : undefined;
   const latestFmMonth = fmByMonth.length > 0 ? String(fmByMonth[fmByMonth.length - 1]?.yearMonth ?? "") : undefined;
 
   const getMonthData = (data: Record<string, any>[], ym: string | undefined) => {
@@ -412,6 +438,7 @@ export default function OverallKPI() {
 
   const mtdLatest = getMonthData(mtdByMonth, latestMtdMonth);
   const lmtdData = getMonthData(mtdByMonth, lmtdMonth);
+  const yoyData = getMonthData(mtdByMonth, yoyMonth);
   const fmLatest = getMonthData(fmByMonth, latestFmMonth);
 
   const isLoading = fmQuery.isLoading || mtdQuery.isLoading;
@@ -505,6 +532,7 @@ export default function OverallKPI() {
                     mtdValue={Number(mtdLatest[field]) || 0}
                     lmtdValue={Number(lmtdData[field]) || 0}
                     fmValue={Number(fmLatest[field]) || 0}
+                    yoyValue={yoyMonth && yoyData[field] ? Number(yoyData[field]) : undefined}
                     unit={kpi.unit}
                     divisor={kpi.divisor}
                   />
@@ -525,6 +553,7 @@ export default function OverallKPI() {
                   field={field}
                   mtdValue={Number(mtdLatest[field]) || 0}
                   lmtdValue={Number(lmtdData[field]) || 0}
+                  yoyValue={yoyMonth && yoyData[field] ? Number(yoyData[field]) : undefined}
                   divisor={kpi.divisor}
                   unit={kpi.unit}
                   isActive={activeKpi === field}
