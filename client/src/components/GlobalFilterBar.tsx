@@ -12,11 +12,16 @@ const BRAND_OPTIONS: { value: BrandFilter; label: string }[] = [
   { value: "3ID", label: "3ID" },
 ];
 
+// Prefix used to distinguish branch vs kabkot values in the unified selector
+const BRANCH_PREFIX = "branch::";
+const KABKOT_PREFIX = "kabkot::";
+
 export function GlobalFilterBar() {
   const { filter, setBrand, setArea, setBranch, setKabkot, resetFilters } = useFilter();
   const { data: geoData } = trpc.geo.hierarchy.useQuery();
 
   const areas = useMemo(() => geoData?.areas ?? [], [geoData]);
+
   const branches = useMemo(() => {
     if (!geoData?.hierarchy) return [];
     const all = geoData.hierarchy
@@ -31,13 +36,38 @@ export function GlobalFilterBar() {
     const all = geoData.hierarchy
       .filter((r) => {
         if (filter.area && r.area !== filter.area) return false;
-        if (filter.branch && r.salesArea !== filter.branch) return false;
         return true;
       })
       .map((r) => r.kabkotNm)
       .filter(Boolean) as string[];
     return Array.from(new Set(all)).sort();
-  }, [geoData, filter.area, filter.branch]);
+  }, [geoData, filter.area]);
+
+  // Unified location value: "branch::X" | "kabkot::Y" | "all"
+  const locationValue = useMemo(() => {
+    if (filter.branch) return `${BRANCH_PREFIX}${filter.branch}`;
+    if (filter.kabkot) return `${KABKOT_PREFIX}${filter.kabkot}`;
+    return "all";
+  }, [filter.branch, filter.kabkot]);
+
+  const locationLabel = useMemo(() => {
+    if (filter.branch) return filter.branch;
+    if (filter.kabkot) return filter.kabkot;
+    return null;
+  }, [filter.branch, filter.kabkot]);
+
+  function handleLocationChange(val: string) {
+    if (val === "all") {
+      setBranch("");
+      setKabkot("");
+    } else if (val.startsWith(BRANCH_PREFIX)) {
+      setBranch(val.slice(BRANCH_PREFIX.length));
+    } else if (val.startsWith(KABKOT_PREFIX)) {
+      // setKabkot clears branch via FilterContext
+      setBranch("");
+      setKabkot(val.slice(KABKOT_PREFIX.length));
+    }
+  }
 
   const hasActiveFilters = filter.area || filter.branch || filter.kabkot || filter.brand !== "Combined";
 
@@ -88,34 +118,42 @@ export function GlobalFilterBar() {
         </Select>
       </div>
 
-      {/* Branch */}
+      {/* Unified Location (Branch OR Kabupaten) */}
       <div className="flex items-center gap-2">
-        <span className="text-xs text-muted-foreground whitespace-nowrap">Branch</span>
-        <Select value={filter.branch || "all"} onValueChange={(v) => setBranch(v === "all" ? "" : v)}>
-          <SelectTrigger className="h-7 w-40 text-xs bg-secondary border-border">
-            <SelectValue placeholder="All Branches" />
+        <span className="text-xs text-muted-foreground whitespace-nowrap">Location</span>
+        <Select value={locationValue} onValueChange={handleLocationChange}>
+          <SelectTrigger className="h-7 w-52 text-xs bg-secondary border-border">
+            <SelectValue placeholder="All Locations" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Branches</SelectItem>
-            {branches.map((b) => (
-              <SelectItem key={b} value={b}>{b}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+            <SelectItem value="all">All Locations</SelectItem>
 
-      {/* Kabupaten */}
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-muted-foreground whitespace-nowrap">Kabupaten</span>
-        <Select value={filter.kabkot || "all"} onValueChange={(v) => setKabkot(v === "all" ? "" : v)}>
-          <SelectTrigger className="h-7 w-44 text-xs bg-secondary border-border">
-            <SelectValue placeholder="All Kabupaten" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Kabupaten</SelectItem>
-            {kabkots.map((k) => (
-              <SelectItem key={k} value={k}>{k}</SelectItem>
-            ))}
+            {branches.length > 0 && (
+              <>
+                {/* Group label — not selectable */}
+                <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground select-none">
+                  Branch (Sales Area)
+                </div>
+                {branches.map((b) => (
+                  <SelectItem key={`branch-${b}`} value={`${BRANCH_PREFIX}${b}`}>
+                    {b}
+                  </SelectItem>
+                ))}
+              </>
+            )}
+
+            {kabkots.length > 0 && (
+              <>
+                <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground select-none mt-1">
+                  Kabupaten / Kota
+                </div>
+                {kabkots.map((k) => (
+                  <SelectItem key={`kabkot-${k}`} value={`${KABKOT_PREFIX}${k}`}>
+                    {k}
+                  </SelectItem>
+                ))}
+              </>
+            )}
           </SelectContent>
         </Select>
       </div>
@@ -127,14 +165,13 @@ export function GlobalFilterBar() {
             {filter.area} ×
           </Badge>
         )}
-        {filter.branch && (
-          <Badge variant="secondary" className="text-xs py-0.5 px-2 cursor-pointer" onClick={() => setBranch("")}>
-            {filter.branch} ×
-          </Badge>
-        )}
-        {filter.kabkot && (
-          <Badge variant="secondary" className="text-xs py-0.5 px-2 cursor-pointer" onClick={() => setKabkot("")}>
-            {filter.kabkot} ×
+        {locationLabel && (
+          <Badge
+            variant="secondary"
+            className="text-xs py-0.5 px-2 cursor-pointer"
+            onClick={() => { setBranch(""); setKabkot(""); }}
+          >
+            {locationLabel} ×
           </Badge>
         )}
         {hasActiveFilters && (
