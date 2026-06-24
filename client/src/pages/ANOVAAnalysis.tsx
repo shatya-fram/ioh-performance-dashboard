@@ -1,11 +1,11 @@
-import { useMemo } from "react";
+import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useFilter } from "@/contexts/FilterContext";
 import { GlobalFilterBar } from "@/components/GlobalFilterBar";
 import { formatNumber, BRAND_COLORS } from "@/lib/kpiUtils";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { TrendingDown, TrendingUp, Minus } from "lucide-react";
+import { TrendingDown, TrendingUp, Minus, ChevronDown, ChevronUp, X } from "lucide-react";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmtRev(v: number): string {
@@ -344,9 +344,181 @@ function BrandPerformanceTable({
   );
 }
 
+// ─── Kabupaten Drill-Down Table ──────────────────────────────────────────────
+type KpiKey = "revPrepaid" | "revBase" | "revAcqM0" | "revOrganic" | "revTrade" | "revNonTrade";
+
+const KPI_META: Record<KpiKey, { label: string; accentColor: string }> = {
+  revPrepaid:  { label: "Total Revenue",         accentColor: BRAND_COLORS["IOH"] },
+  revBase:     { label: "Base Revenue",           accentColor: "oklch(0.65 0.18 220)" },
+  revAcqM0:    { label: "Acquisition Revenue",    accentColor: "oklch(0.78 0.16 75)" },
+  revOrganic:  { label: "Organic Channel",        accentColor: "oklch(0.72 0.18 160)" },
+  revTrade:    { label: "Trade Channel",          accentColor: "oklch(0.70 0.18 280)" },
+  revNonTrade: { label: "Non-Trade Channel",      accentColor: "oklch(0.68 0.20 340)" },
+};
+
+function KabupatenDrillDown({
+  kpiKey,
+  latestMtd,
+  prevMtd,
+  kabkotData,
+  totalGap,
+  onClose,
+}: {
+  kpiKey: KpiKey;
+  latestMtd: string;
+  prevMtd: string;
+  kabkotData: any[];
+  totalGap: number;
+  onClose: () => void;
+}) {
+  const [sortCol, setSortCol] = useState<"gap" | "mtd" | "growth">("gap");
+  const [sortAsc, setSortAsc] = useState(false);
+
+  const meta = KPI_META[kpiKey];
+
+  // Build per-kabkot rows: aggregate IM3 + 3ID for IOH, keep brand split
+  const rows = useMemo(() => {
+    const kabkots = Array.from(new Set(
+      kabkotData
+        .filter((r) => r.kabkotNm && r.kabkotNm !== "NULL")
+        .map((r) => String(r.kabkotNm))
+    )).sort();
+
+    return kabkots.map((kab) => {
+      function sumBrand(brand: string, ym: string) {
+        return kabkotData
+          .filter((r) => String(r.kabkotNm) === kab && String(r.brand) === brand && String(r.yearMonth) === ym)
+          .reduce((s, r) => s + (Number(r[kpiKey]) || 0), 0);
+      }
+      const im3Mtd  = sumBrand("IM3", latestMtd);
+      const im3Lmtd = sumBrand("IM3", prevMtd);
+      const sid3Mtd  = sumBrand("3ID", latestMtd);
+      const sid3Lmtd = sumBrand("3ID", prevMtd);
+      const iohMtd  = im3Mtd  + sid3Mtd;
+      const iohLmtd = im3Lmtd + sid3Lmtd;
+      const gap = iohMtd - iohLmtd;
+      const growth = iohLmtd !== 0 ? (gap / Math.abs(iohLmtd)) * 100 : 0;
+      const anovaImpact = totalGap !== 0 ? (gap / Math.abs(totalGap)) * 100 : 0;
+      return { kab, im3Mtd, im3Lmtd, sid3Mtd, sid3Lmtd, iohMtd, iohLmtd, gap, growth, anovaImpact };
+    });
+  }, [kabkotData, kpiKey, latestMtd, prevMtd, totalGap]);
+
+  const sorted = useMemo(() => {
+    return [...rows].sort((a, b) => {
+      const va = sortCol === "gap" ? a.gap : sortCol === "mtd" ? a.iohMtd : a.growth;
+      const vb = sortCol === "gap" ? b.gap : sortCol === "mtd" ? b.iohMtd : b.growth;
+      return sortAsc ? va - vb : vb - va;
+    });
+  }, [rows, sortCol, sortAsc]);
+
+  function toggleSort(col: typeof sortCol) {
+    if (sortCol === col) setSortAsc(!sortAsc);
+    else { setSortCol(col); setSortAsc(false); }
+  }
+
+  function SortIcon({ col }: { col: typeof sortCol }) {
+    if (sortCol !== col) return <span className="opacity-30 ml-0.5">↕</span>;
+    return sortAsc ? <ChevronUp className="inline w-3 h-3 ml-0.5" /> : <ChevronDown className="inline w-3 h-3 ml-0.5" />;
+  }
+
+  return (
+    <div className="chart-container overflow-x-auto mt-2" style={{ borderTop: `3px solid ${meta.accentColor}` }}>
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">
+            Kabupaten Drill-Down —
+            <span style={{ color: meta.accentColor }} className="ml-1">{meta.label}</span>
+          </h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            MTD vs LMTD gap per Kabupaten · ANOVA Impact = Kabupaten gap as % of total IOH gap
+          </p>
+        </div>
+        <button
+          onClick={onClose}
+          className="p-1.5 rounded-md hover:bg-accent/20 text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+      <table className="w-full text-xs data-table min-w-[900px]">
+        <thead>
+          <tr>
+            <th className="text-left py-2.5 px-4 rounded-l-md w-[180px]">Kabupaten / Kota</th>
+            <th className="text-right py-2.5 px-3" style={{ color: BRAND_COLORS["IM3"] }}>IM3 MTD</th>
+            <th className="text-right py-2.5 px-3 text-muted-foreground">IM3 LMTD</th>
+            <th className="text-right py-2.5 px-3" style={{ color: BRAND_COLORS["IM3"] }}>IM3 GAP</th>
+            <th className="text-right py-2.5 px-3" style={{ color: BRAND_COLORS["3ID"] }}>3ID MTD</th>
+            <th className="text-right py-2.5 px-3 text-muted-foreground">3ID LMTD</th>
+            <th className="text-right py-2.5 px-3" style={{ color: BRAND_COLORS["3ID"] }}>3ID GAP</th>
+            <th
+              className="text-right py-2.5 px-3 cursor-pointer hover:text-foreground"
+              style={{ color: BRAND_COLORS["IOH"] }}
+              onClick={() => toggleSort("mtd")}
+            >
+              IOH MTD <SortIcon col="mtd" />
+            </th>
+            <th
+              className="text-right py-2.5 px-3 cursor-pointer hover:text-foreground"
+              style={{ color: BRAND_COLORS["IOH"] }}
+              onClick={() => toggleSort("gap")}
+            >
+              IOH GAP <SortIcon col="gap" />
+            </th>
+            <th
+              className="text-right py-2.5 px-3 cursor-pointer hover:text-foreground"
+              onClick={() => toggleSort("growth")}
+            >
+              Growth % <SortIcon col="growth" />
+            </th>
+            <th className="text-right py-2.5 px-4 rounded-r-md text-amber-400">ANOVA Impact</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((row, i) => {
+            const im3Gap = row.im3Mtd - row.im3Lmtd;
+            const sid3Gap = row.sid3Mtd - row.sid3Lmtd;
+            const isNeg = row.gap < 0;
+            return (
+              <tr
+                key={i}
+                className={`border-t border-border/20 hover:bg-accent/10 transition-colors ${
+                  isNeg && Math.abs(row.anovaImpact) >= 10 ? "bg-red-500/5" : ""
+                }`}
+              >
+                <td className="py-2.5 px-4 font-medium text-foreground/90">{row.kab}</td>
+                <td className="py-2.5 px-3 text-right">{formatNumber(row.im3Mtd / 1e9, 2)}</td>
+                <td className="py-2.5 px-3 text-right text-muted-foreground">{formatNumber(row.im3Lmtd / 1e9, 2)}</td>
+                <td className={`py-2.5 px-3 text-right font-semibold ${growthClass(im3Gap)}`}>
+                  {im3Gap >= 0 ? "+" : ""}{formatNumber(im3Gap / 1e9, 2)}
+                </td>
+                <td className="py-2.5 px-3 text-right">{formatNumber(row.sid3Mtd / 1e9, 2)}</td>
+                <td className="py-2.5 px-3 text-right text-muted-foreground">{formatNumber(row.sid3Lmtd / 1e9, 2)}</td>
+                <td className={`py-2.5 px-3 text-right font-semibold ${growthClass(sid3Gap)}`}>
+                  {sid3Gap >= 0 ? "+" : ""}{formatNumber(sid3Gap / 1e9, 2)}
+                </td>
+                <td className="py-2.5 px-3 text-right font-medium">{formatNumber(row.iohMtd / 1e9, 2)}</td>
+                <td className={`py-2.5 px-3 text-right font-semibold ${growthClass(row.gap)}`}>
+                  {row.gap >= 0 ? "+" : ""}{formatNumber(row.gap / 1e9, 2)}
+                </td>
+                <td className={`py-2.5 px-3 text-right ${growthClass(row.growth)}`}>
+                  <GrowthIcon v={row.growth} />{fmtGrowth(row.growth)}
+                </td>
+                <td className={`py-2.5 px-4 text-right font-semibold text-amber-400`}>
+                  {row.anovaImpact >= 0 ? "+" : ""}{row.anovaImpact.toFixed(1)}%
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ANOVAAnalysis() {
   const { filter, brandsArray, areasArray, salesAreasArray, kabkotsArray, setNormalizeVoucher } = useFilter();
+  const [selectedKpi, setSelectedKpi] = useState<KpiKey | null>(null);
 
   const fmQuery = trpc.fm.trend.useQuery({
     brands: brandsArray,
@@ -356,6 +528,13 @@ export default function ANOVAAnalysis() {
   });
 
   const mtdQuery = trpc.mtd.trend.useQuery({
+    brands: brandsArray,
+    areas: areasArray.length ? areasArray : undefined,
+    salesAreas: salesAreasArray.length ? salesAreasArray : undefined,
+    kabkots: kabkotsArray.length ? kabkotsArray : undefined,
+  });
+
+  const kabkotQuery = trpc.mtd.byKabkot.useQuery({
     brands: brandsArray,
     areas: areasArray.length ? areasArray : undefined,
     salesAreas: salesAreasArray.length ? salesAreasArray : undefined,
@@ -604,55 +783,33 @@ export default function ANOVAAnalysis() {
       {/* ── Summary boxes ───────────────────────────────────────────────────── */}
       {!isLoading && (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          <SummaryBox
-            label="Total Revenue"
-            sublabel={normalizeVoucher ? "excl. Voucher Game" : undefined}
-            mtd={totalMtd}
-            lmtd={totalLmtd}
-            gap={totalGap}
-            growth={totalGrowth}
-            accentColor={BRAND_COLORS["IOH"]}
-          />
-          <SummaryBox
-            label="Base Revenue"
-            mtd={iohMtd.revBase}
-            lmtd={iohLmtd.revBase}
-            gap={baseGap}
-            growth={baseGrowth}
-            accentColor="oklch(0.65 0.18 220)"
-          />
-          <SummaryBox
-            label="Acquisition Revenue"
-            mtd={iohMtd.revAcqM0}
-            lmtd={iohLmtd.revAcqM0}
-            gap={acqGap}
-            growth={acqGrowth}
-            accentColor="oklch(0.78 0.16 75)"
-          />
-          <SummaryBox
-            label="Organic Channel"
-            mtd={iohMtd.revOrganic}
-            lmtd={iohLmtd.revOrganic}
-            gap={orgGap}
-            growth={orgGrowth}
-            accentColor="oklch(0.72 0.18 160)"
-          />
-          <SummaryBox
-            label="Trade Channel"
-            mtd={iohMtd.revTrade}
-            lmtd={iohLmtd.revTrade}
-            gap={tradeGap}
-            growth={tradeGrowth}
-            accentColor="oklch(0.70 0.18 280)"
-          />
-          <SummaryBox
-            label="Non-Trade Channel"
-            mtd={iohMtd.revNonTrade}
-            lmtd={iohLmtd.revNonTrade}
-            gap={ntGap}
-            growth={ntGrowth}
-            accentColor="oklch(0.68 0.20 340)"
-          />
+          {([
+            { kpiKey: "revPrepaid" as KpiKey, label: "Total Revenue", sublabel: normalizeVoucher ? "excl. Voucher Game" : undefined, mtd: totalMtd, lmtd: totalLmtd, gap: totalGap, growth: totalGrowth, accentColor: BRAND_COLORS["IOH"] },
+            { kpiKey: "revBase" as KpiKey, label: "Base Revenue", mtd: iohMtd.revBase, lmtd: iohLmtd.revBase, gap: baseGap, growth: baseGrowth, accentColor: "oklch(0.65 0.18 220)" },
+            { kpiKey: "revAcqM0" as KpiKey, label: "Acquisition Revenue", mtd: iohMtd.revAcqM0, lmtd: iohLmtd.revAcqM0, gap: acqGap, growth: acqGrowth, accentColor: "oklch(0.78 0.16 75)" },
+            { kpiKey: "revOrganic" as KpiKey, label: "Organic Channel", mtd: iohMtd.revOrganic, lmtd: iohLmtd.revOrganic, gap: orgGap, growth: orgGrowth, accentColor: "oklch(0.72 0.18 160)" },
+            { kpiKey: "revTrade" as KpiKey, label: "Trade Channel", mtd: iohMtd.revTrade, lmtd: iohLmtd.revTrade, gap: tradeGap, growth: tradeGrowth, accentColor: "oklch(0.70 0.18 280)" },
+            { kpiKey: "revNonTrade" as KpiKey, label: "Non-Trade Channel", mtd: iohMtd.revNonTrade, lmtd: iohLmtd.revNonTrade, gap: ntGap, growth: ntGrowth, accentColor: "oklch(0.68 0.20 340)" },
+          ]).map((box) => (
+            <div
+              key={box.kpiKey}
+              onClick={() => setSelectedKpi(selectedKpi === box.kpiKey ? null : box.kpiKey)}
+              className={`cursor-pointer transition-all ${
+                selectedKpi === box.kpiKey ? "ring-2 ring-offset-1 ring-offset-background" : "hover:ring-1 hover:ring-border"
+              }`}
+              style={selectedKpi === box.kpiKey ? { outline: `2px solid ${box.accentColor}`, outlineOffset: "2px" } : {}}
+            >
+              <SummaryBox
+                label={box.label}
+                sublabel={box.sublabel}
+                mtd={box.mtd}
+                lmtd={box.lmtd}
+                gap={box.gap}
+                growth={box.growth}
+                accentColor={box.accentColor}
+              />
+            </div>
+          ))}
         </div>
       )}
 
@@ -697,6 +854,24 @@ export default function ANOVAAnalysis() {
           normalizeVoucher={normalizeVoucher}
           voucherIm3={voucherIm3}
           voucher3id={voucher3id}
+        />
+      )}
+
+      {/* ── Kabupaten Drill-Down ─────────────────────────────────────────────── */}
+      {!isLoading && selectedKpi && (
+        <KabupatenDrillDown
+          kpiKey={selectedKpi}
+          latestMtd={latestMtd}
+          prevMtd={prevMtd}
+          kabkotData={kabkotQuery.data ?? []}
+          totalGap={
+            selectedKpi === "revPrepaid" ? totalGap :
+            selectedKpi === "revBase" ? baseGap :
+            selectedKpi === "revAcqM0" ? acqGap :
+            selectedKpi === "revOrganic" ? orgGap :
+            selectedKpi === "revTrade" ? tradeGap : ntGap
+          }
+          onClose={() => setSelectedKpi(null)}
         />
       )}
     </div>

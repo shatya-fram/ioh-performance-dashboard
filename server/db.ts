@@ -271,6 +271,33 @@ export async function getMtdTrend(filter: KpiFilter) {
     .orderBy(asc(mtdRaw.yearMonth), asc(mtdRaw.brand));
 }
 
+export async function getMtdByKabkot(filter: KpiFilter) {
+  const db = await getDb();
+  if (!db) return [];
+  const conditions = buildMtdConditions(filter);
+  return db
+    .select({
+      yearMonth: mtdRaw.yearMonth,
+      brand: mtdRaw.brand,
+      salesArea: mtdRaw.salesArea,
+      kabkotNm: mtdRaw.kabkotNm,
+      revPrepaid: sql<number>`SUM(${mtdRaw.revPrepaid})`,
+      subsRgu90d: sql<number>`SUM(${mtdRaw.subsRgu90d})`,
+      subsGrossAdd: sql<number>`SUM(${mtdRaw.subsGrossAdd})`,
+      packPurchaseMtd: sql<number>`SUM(${mtdRaw.packPurchaseMtd})`,
+      subsAvgVlrDaily: sql<number>`SUM(${mtdRaw.subsAvgVlrDaily})`,
+      revAcqM0: sql<number>`SUM(${mtdRaw.revAcqM0})`,
+      revBase: sql<number>`SUM(${mtdRaw.revBase})`,
+      revNonTrade: sql<number>`SUM(${mtdRaw.revNonTrade})`,
+      revTrade: sql<number>`SUM(${mtdRaw.revTrade})`,
+      revOrganic: sql<number>`SUM(${mtdRaw.revOrganic})`,
+    })
+    .from(mtdRaw)
+    .where(conditions.length ? and(...conditions) : undefined)
+    .groupBy(mtdRaw.yearMonth, mtdRaw.brand, mtdRaw.salesArea, mtdRaw.kabkotNm)
+    .orderBy(asc(mtdRaw.yearMonth), asc(mtdRaw.salesArea), asc(mtdRaw.kabkotNm));
+}
+
 // ─── VLR Tenure queries ───────────────────────────────────────────────────────
 export async function getVlrTrend(filter: {
   brands?: string[];

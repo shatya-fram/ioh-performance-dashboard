@@ -10,6 +10,7 @@ import {
   getFmTrend,
   getFmByBranch,
   getMtdTrend,
+  getMtdByKabkot,
   getVlrTrend,
   getRevSegmentsTrend,
   getVoucherGameData,
@@ -65,6 +66,7 @@ export const appRouter = router({
   // ─── MTD Trend ───────────────────────────────────────────────────────────
   mtd: router({
     trend: publicProcedure.input(FilterInput).query(({ input }) => getMtdTrend(input)),
+    byKabkot: publicProcedure.input(FilterInput).query(({ input }) => getMtdByKabkot(input)),
   }),
 
   // ─── VLR ─────────────────────────────────────────────────────────────────
