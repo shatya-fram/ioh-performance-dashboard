@@ -1,17 +1,16 @@
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
-import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 function fmtRev(v: number | null | undefined) {
   if (v == null) return "—";
   const abs = Math.abs(v);
   if (abs >= 1_000_000_000_000) return (v / 1_000_000_000_000).toFixed(2) + " T";
-  if (abs >= 1_000_000_000) return (v / 1_000_000_000).toFixed(1) + " Bn";
+  if (abs >= 1_000_000_000) return (v / 1_000_000_000).toFixed(2) + " Bn";
   if (abs >= 1_000_000) return (v / 1_000_000).toFixed(1) + " Mn";
   if (abs >= 1_000) return (v / 1_000).toFixed(1) + " K";
   return v.toFixed(0);
@@ -22,15 +21,46 @@ function calcGrowth(mtd: number, lmtd: number) {
   return ((mtd - lmtd) / Math.abs(lmtd)) * 100;
 }
 
-function GrowthBadge({ pct }: { pct: number | null }) {
-  if (pct == null) return <span className="text-gray-500">—</span>;
+function GrowthCell({ mtd, lmtd }: { mtd: number; lmtd: number }) {
+  const pct = calcGrowth(mtd, lmtd);
+  if (pct == null) return <td className="px-3 py-2 text-center text-gray-500">—</td>;
   const color = pct >= 0 ? "text-emerald-400" : "text-red-400";
-  const arrow = pct >= 0 ? "↑" : "↓";
-  return <span className={`font-semibold ${color}`}>{arrow}{Math.abs(pct).toFixed(1)}%</span>;
+  const arrow = pct >= 0 ? "▲" : "▼";
+  return <td className={`px-3 py-2 text-center font-semibold ${color}`}>{arrow} {Math.abs(pct).toFixed(1)}%</td>;
 }
 
-// ─── multi-select pill component ─────────────────────────────────────────────
-function MultiSelect({
+function GapCell({ mtd, lmtd }: { mtd: number; lmtd: number }) {
+  const gap = mtd - lmtd;
+  const color = gap >= 0 ? "text-emerald-400" : "text-red-400";
+  return <td className={`px-3 py-2 text-right font-semibold ${color}`}>{fmtRev(gap)}</td>;
+}
+
+function getMonthLabel(ym: string) {
+  if (!ym || ym.length < 6) return ym;
+  const y = ym.slice(0, 4);
+  const m = parseInt(ym.slice(4, 6));
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return `${months[m-1]} ${y}`;
+}
+
+// ─── pill toggle button ────────────────────────────────────────────────────────
+function PillToggle({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-3 py-1 rounded-full text-sm font-medium border transition-colors ${
+        active
+          ? "bg-amber-500 border-amber-500 text-black"
+          : "bg-gray-800 border-gray-600 text-gray-300 hover:border-amber-400"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+// ─── multi-select pill row ─────────────────────────────────────────────────────
+function FilterRow({
   label,
   options,
   selected,
@@ -43,377 +73,421 @@ function MultiSelect({
 }) {
   const toggle = (v: string) =>
     selected.includes(v) ? onChange(selected.filter((x) => x !== v)) : onChange([...selected, v]);
-  const clearAll = () => onChange([]);
 
   return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-gray-300">{label}</span>
-        {selected.length > 0 && (
-          <button onClick={clearAll} className="text-xs text-amber-400 hover:underline">Clear</button>
-        )}
-      </div>
-      <div className="flex flex-wrap gap-1 max-h-28 overflow-y-auto pr-1">
+    <div className="flex items-start gap-3">
+      <span className="text-sm font-semibold text-gray-400 w-28 shrink-0 pt-1">{label}</span>
+      <div className="flex flex-wrap gap-1.5">
         {options.map((o) => (
-          <button
-            key={o}
-            onClick={() => toggle(o)}
-            className={`px-2 py-0.5 rounded text-xs border transition-colors ${
-              selected.includes(o)
-                ? "bg-amber-500 border-amber-500 text-black font-semibold"
-                : "bg-gray-800 border-gray-600 text-gray-300 hover:border-amber-400"
-            }`}
-          >
-            {o}
-          </button>
+          <PillToggle key={o} label={o} active={selected.includes(o)} onClick={() => toggle(o)} />
         ))}
+        {selected.length > 0 && (
+          <button onClick={() => onChange([])} className="px-2 py-1 text-xs text-amber-400 hover:underline">
+            Clear
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
-// ─── GROUP BY options ─────────────────────────────────────────────────────────
-const GROUP_BY_OPTIONS = [
-  { value: "channelGroup", label: "Channel Group" },
-  { value: "channelDetail", label: "Channel Detail" },
-  { value: "atlBtl", label: "ATL / BTL" },
-  { value: "tenure", label: "Tenure" },
-  { value: "merchant", label: "Merchant (DD)" },
-  { value: "productFamily", label: "Product Family" },
-  { value: "productGroup", label: "Product Group" },
-  { value: "kpi", label: "KPI Type" },
-  { value: "brand", label: "Brand" },
-  { value: "areaBranch", label: "Branch" },
-  { value: "areaKabkot", label: "Kabupaten" },
-] as const;
+// ─── reusable variance table ───────────────────────────────────────────────────
+interface VarRow {
+  label: string;
+  lastFm: number;
+  lmtd: number;
+  mtd: number;
+}
 
-type GroupByKey = typeof GROUP_BY_OPTIONS[number]["value"];
+function VarianceTable({
+  title,
+  subtitle,
+  rows,
+  mtdLabel,
+  lmtdLabel,
+  lastFmLabel,
+  highlight,
+  maxRows,
+}: {
+  title: string;
+  subtitle?: string;
+  rows: VarRow[];
+  mtdLabel: string;
+  lmtdLabel: string;
+  lastFmLabel: string;
+  highlight?: "bottom" | "top";
+  maxRows?: number;
+}) {
+  const [sortKey, setSortKey] = useState<"label" | "lastFm" | "lmtd" | "mtd" | "gap" | "growth">("gap");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">(highlight === "bottom" ? "asc" : "desc");
 
-// ─── months helper ─────────────────────────────────────────────────────────────
-function getMonthLabel(ym: string) {
-  if (!ym || ym.length < 6) return ym;
-  const y = ym.slice(0, 4);
-  const m = parseInt(ym.slice(4, 6));
-  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  return `${months[m-1]} ${y}`;
+  const sorted = useMemo(() => {
+    const copy = [...rows];
+    copy.sort((a, b) => {
+      let va = 0, vb = 0;
+      if (sortKey === "label") return sortDir === "asc" ? a.label.localeCompare(b.label) : b.label.localeCompare(a.label);
+      if (sortKey === "lastFm") { va = a.lastFm; vb = b.lastFm; }
+      else if (sortKey === "lmtd") { va = a.lmtd; vb = b.lmtd; }
+      else if (sortKey === "mtd") { va = a.mtd; vb = b.mtd; }
+      else if (sortKey === "gap") { va = a.mtd - a.lmtd; vb = b.mtd - b.lmtd; }
+      else if (sortKey === "growth") {
+        va = a.lmtd ? (a.mtd - a.lmtd) / Math.abs(a.lmtd) : 0;
+        vb = b.lmtd ? (b.mtd - b.lmtd) / Math.abs(b.lmtd) : 0;
+      }
+      return sortDir === "asc" ? va - vb : vb - va;
+    });
+    return maxRows ? copy.slice(0, maxRows) : copy;
+  }, [rows, sortKey, sortDir, maxRows]);
+
+  const toggleSort = (key: typeof sortKey) => {
+    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir(highlight === "bottom" ? "asc" : "desc"); }
+  };
+
+  const SortTh = ({ k, children }: { k: typeof sortKey; children: React.ReactNode }) => (
+    <th
+      className="px-3 py-2 text-right cursor-pointer select-none hover:text-amber-400 transition-colors"
+      onClick={() => toggleSort(k)}
+    >
+      {children} {sortKey === k ? (sortDir === "asc" ? "↑" : "↓") : ""}
+    </th>
+  );
+
+  const totalLastFm = rows.reduce((s, r) => s + r.lastFm, 0);
+  const totalLmtd = rows.reduce((s, r) => s + r.lmtd, 0);
+  const totalMtd = rows.reduce((s, r) => s + r.mtd, 0);
+
+  return (
+    <div className="bg-gray-900 border border-gray-700 rounded-lg overflow-hidden">
+      <div className="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
+        <div>
+          <h3 className="text-base font-bold text-white">{title}</h3>
+          {subtitle && <p className="text-sm text-gray-400 mt-0.5">{subtitle}</p>}
+        </div>
+        {highlight && (
+          <span className={`text-xs font-semibold px-2 py-1 rounded ${
+            highlight === "bottom" ? "bg-red-900/50 text-red-300" : "bg-emerald-900/50 text-emerald-300"
+          }`}>
+            {highlight === "bottom" ? "⬇ Bottom by Gap" : "⬆ Top by Gain"}
+          </span>
+        )}
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-xs uppercase text-gray-400 bg-gray-800/60 border-b border-gray-700">
+              <th className="px-3 py-2 text-left cursor-pointer hover:text-amber-400" onClick={() => toggleSort("label")}>
+                Dimension {sortKey === "label" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+              </th>
+              <SortTh k="lastFm">Last FM<br /><span className="font-normal normal-case text-gray-500">{lastFmLabel}</span></SortTh>
+              <SortTh k="lmtd">LMTD<br /><span className="font-normal normal-case text-gray-500">{lmtdLabel}</span></SortTh>
+              <SortTh k="mtd">MTD<br /><span className="font-normal normal-case text-gray-500">{mtdLabel}</span></SortTh>
+              <SortTh k="gap">Gap<br /><span className="font-normal normal-case text-gray-500">(MTD−LMTD)</span></SortTh>
+              <SortTh k="growth">Growth</SortTh>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((row, i) => (
+              <tr key={row.label} className={`border-b border-gray-800 ${i % 2 === 0 ? "bg-gray-900" : "bg-gray-800/30"} hover:bg-gray-700/40`}>
+                <td className="px-3 py-2 font-medium text-gray-100">{row.label || "(blank)"}</td>
+                <td className="px-3 py-2 text-right text-gray-300">{fmtRev(row.lastFm)}</td>
+                <td className="px-3 py-2 text-right text-gray-300">{fmtRev(row.lmtd)}</td>
+                <td className="px-3 py-2 text-right text-white font-semibold">{fmtRev(row.mtd)}</td>
+                <GapCell mtd={row.mtd} lmtd={row.lmtd} />
+                <GrowthCell mtd={row.mtd} lmtd={row.lmtd} />
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="bg-gray-800 border-t-2 border-amber-500/50 font-bold text-white">
+              <td className="px-3 py-2">TOTAL</td>
+              <td className="px-3 py-2 text-right">{fmtRev(totalLastFm)}</td>
+              <td className="px-3 py-2 text-right">{fmtRev(totalLmtd)}</td>
+              <td className="px-3 py-2 text-right">{fmtRev(totalMtd)}</td>
+              <GapCell mtd={totalMtd} lmtd={totalLmtd} />
+              <GrowthCell mtd={totalMtd} lmtd={totalLmtd} />
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  );
 }
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function ProductAnalysis() {
-  // Brand filter
+  // Filters (matching Excel template)
   const [brands, setBrands] = useState<string[]>([]);
-  // Dimension filters
   const [branches, setBranches] = useState<string[]>([]);
-  const [kabkots, setKabkots] = useState<string[]>([]);
-  const [channelGroups, setChannelGroups] = useState<string[]>([]);
-  const [channelDetails, setChannelDetails] = useState<string[]>([]);
   const [atlBtl, setAtlBtl] = useState<string[]>([]);
   const [tenures, setTenures] = useState<string[]>([]);
+  // Secondary filters
+  const [channelGroups, setChannelGroups] = useState<string[]>([]);
+  const [channelDetails, setChannelDetails] = useState<string[]>([]);
   const [merchants, setMerchants] = useState<string[]>([]);
   const [kpis, setKpis] = useState<string[]>([]);
   const [productFamilies, setProductFamilies] = useState<string[]>([]);
-  // Group by
-  const [groupBy, setGroupBy] = useState<GroupByKey>("channelGroup");
+  const [showMerchantFilter, setShowMerchantFilter] = useState(false);
+  const [topN, setTopN] = useState(20);
 
   // Load dimensions
   const { data: dims } = trpc.product.dimensions.useQuery();
 
-  // Determine available year-months from analysis data (we'll use latest 2)
-  // We query all data and compute MTD/LMTD on the frontend
-  const analysisInput = useMemo(() => ({
+  // Three separate queries for the three table views
+  const baseInput = useMemo(() => ({
     brands: brands.length ? brands : undefined,
     branches: branches.length ? branches : undefined,
-    kabkots: kabkots.length ? kabkots : undefined,
-    channelGroups: channelGroups.length ? channelGroups : undefined,
-    channelDetails: channelDetails.length ? channelDetails : undefined,
     atlBtl: atlBtl.length ? atlBtl : undefined,
     tenures: tenures.length ? tenures : undefined,
+    channelGroups: channelGroups.length ? channelGroups : undefined,
+    channelDetails: channelDetails.length ? channelDetails : undefined,
     merchants: merchants.length ? merchants : undefined,
     kpis: kpis.length ? kpis : undefined,
     productFamilies: productFamilies.length ? productFamilies : undefined,
-    groupBy,
-  }), [brands, branches, kabkots, channelGroups, channelDetails, atlBtl, tenures, merchants, kpis, productFamilies, groupBy]);
+  }), [brands, branches, atlBtl, tenures, channelGroups, channelDetails, merchants, kpis, productFamilies]);
 
-  const { data: rawRows, isLoading } = trpc.product.analysis.useQuery(analysisInput);
+  const { data: byBranch, isLoading: loadBranch } = trpc.product.analysis.useQuery({ ...baseInput, groupBy: "areaBranch" });
+  const { data: byChannel, isLoading: loadChannel } = trpc.product.analysis.useQuery({ ...baseInput, groupBy: "channelGroup" });
+  const { data: byTenure, isLoading: loadTenure } = trpc.product.analysis.useQuery({ ...baseInput, groupBy: "tenure" });
+  const { data: byChannelDetail, isLoading: loadChDetail } = trpc.product.analysis.useQuery({ ...baseInput, groupBy: "channelDetail" });
+  const { data: byProductGroup, isLoading: loadProdGroup } = trpc.product.analysis.useQuery({ ...baseInput, groupBy: "productGroup" });
 
-  // Compute MTD / LMTD from the two latest year-months in the data
-  const { mtdMonth, lmtdMonth, tableRows, totalMtd, totalLmtd } = useMemo(() => {
-    if (!rawRows || rawRows.length === 0) return { mtdMonth: "", lmtdMonth: "", tableRows: [], totalMtd: 0, totalLmtd: 0 };
+  const isLoading = loadBranch || loadChannel || loadTenure || loadChDetail || loadProdGroup;
 
-    const months = Array.from(new Set(rawRows.map(r => r.yearMonth).filter(Boolean))).sort();
+  // Helper: pivot raw rows into VarRow[]
+  function pivotRows(raw: typeof byBranch): { rows: VarRow[]; mtdMonth: string; lmtdMonth: string; lastFmMonth: string } {
+    if (!raw || raw.length === 0) return { rows: [], mtdMonth: "", lmtdMonth: "", lastFmMonth: "" };
+    const months = Array.from(new Set(raw.map(r => r.yearMonth).filter(Boolean))).sort() as string[];
     const mtdMonth = months[months.length - 1] || "";
     const lmtdMonth = months[months.length - 2] || "";
+    const lastFmMonth = months[months.length - 3] || lmtdMonth;
 
-    // Aggregate by dimension + brand for MTD and LMTD
-    type RowMap = Map<string, { brand: string; mtd: number; lmtd: number }>;
-    const dimMap: Map<string, RowMap> = new Map();
-
-    for (const r of rawRows) {
+    // Aggregate by dimension across all brands
+    const dimMap = new Map<string, { mtd: number; lmtd: number; lastFm: number }>();
+    for (const r of raw) {
       const dim = r.dimension ?? "(blank)";
-      const brand = r.brand ?? "—";
-      if (!dimMap.has(dim)) dimMap.set(dim, new Map());
-      const brandMap = dimMap.get(dim)!;
-      if (!brandMap.has(brand)) brandMap.set(brand, { brand, mtd: 0, lmtd: 0 });
-      const entry = brandMap.get(brand)!;
-      // Always add to MTD for the latest month; if only one month, all data is MTD
-      if (r.yearMonth === mtdMonth) entry.mtd += r.totalRev ?? 0;
-      if (lmtdMonth && r.yearMonth === lmtdMonth) entry.lmtd += r.totalRev ?? 0;
+      if (!dimMap.has(dim)) dimMap.set(dim, { mtd: 0, lmtd: 0, lastFm: 0 });
+      const e = dimMap.get(dim)!;
+      if (r.yearMonth === mtdMonth) e.mtd += r.totalRev ?? 0;
+      if (lmtdMonth && r.yearMonth === lmtdMonth) e.lmtd += r.totalRev ?? 0;
+      if (lastFmMonth && r.yearMonth === lastFmMonth) e.lastFm += r.totalRev ?? 0;
     }
+    const rows: VarRow[] = Array.from(dimMap.entries()).map(([label, v]) => ({ label, ...v }));
+    return { rows, mtdMonth, lmtdMonth, lastFmMonth };
+  }
 
-    // Build table rows sorted by IOH MTD desc
-    const tableRows: Array<{
-      dimension: string;
-      brands: Array<{ brand: string; mtd: number; lmtd: number }>;
-      iohMtd: number;
-      iohLmtd: number;
-    }> = [];
+  const branchData = useMemo(() => pivotRows(byBranch), [byBranch]);
+  const channelData = useMemo(() => pivotRows(byChannel), [byChannel]);
+  const tenureData = useMemo(() => pivotRows(byTenure), [byTenure]);
+  const channelDetailData = useMemo(() => pivotRows(byChannelDetail), [byChannelDetail]);
+  const productGroupData = useMemo(() => pivotRows(byProductGroup), [byProductGroup]);
 
-    for (const [dim, brandMap] of Array.from(dimMap.entries())) {
-      const brandRows = Array.from(brandMap.values()).sort((a, b) => b.mtd - a.mtd);
-      const iohMtd = brandRows.reduce((s, r) => s + r.mtd, 0);
-      const iohLmtd = brandRows.reduce((s, r) => s + r.lmtd, 0);
-      tableRows.push({ dimension: dim, brands: brandRows, iohMtd, iohLmtd });
+  // Bottom N (by gap ascending = most negative first)
+  const bottomN = useMemo(() => {
+    const combined = new Map<string, VarRow>();
+    // Merge channelDetail + productGroup rows for bottom/top tables
+    for (const r of [...channelDetailData.rows, ...productGroupData.rows]) {
+      if (!combined.has(r.label)) combined.set(r.label, { ...r });
+      else {
+        const e = combined.get(r.label)!;
+        e.mtd += r.mtd; e.lmtd += r.lmtd; e.lastFm += r.lastFm;
+      }
     }
+    return Array.from(combined.values())
+      .sort((a, b) => (a.mtd - a.lmtd) - (b.mtd - b.lmtd))
+      .slice(0, topN);
+  }, [channelDetailData.rows, productGroupData.rows, topN]);
 
-    tableRows.sort((a, b) => b.iohMtd - a.iohMtd);
+  const topN_rows = useMemo(() => {
+    const combined = new Map<string, VarRow>();
+    for (const r of [...channelDetailData.rows, ...productGroupData.rows]) {
+      if (!combined.has(r.label)) combined.set(r.label, { ...r });
+      else {
+        const e = combined.get(r.label)!;
+        e.mtd += r.mtd; e.lmtd += r.lmtd; e.lastFm += r.lastFm;
+      }
+    }
+    return Array.from(combined.values())
+      .sort((a, b) => (b.mtd - b.lmtd) - (a.mtd - a.lmtd))
+      .slice(0, topN);
+  }, [channelDetailData.rows, productGroupData.rows, topN]);
 
-    const totalMtd = tableRows.reduce((s, r) => s + r.iohMtd, 0);
-    const totalLmtd = tableRows.reduce((s, r) => s + r.iohLmtd, 0);
+  const mtdLabel = branchData.mtdMonth ? getMonthLabel(branchData.mtdMonth) : "MTD";
+  const lmtdLabel = branchData.lmtdMonth ? getMonthLabel(branchData.lmtdMonth) : "LMTD";
+  const lastFmLabel = branchData.lastFmMonth ? getMonthLabel(branchData.lastFmMonth) : "Last FM";
 
-    return { mtdMonth, lmtdMonth, tableRows, totalMtd, totalLmtd };
-  }, [rawRows]);
-
-  const showMerchant = channelGroups.includes("DIGITAL DISTRIBUTION") || channelDetails.some(d => d.includes("DD"));
-
-  const activeFilters = [
-    ...brands.map(v => ({ label: v, clear: () => setBrands(brands.filter(x => x !== v)) })),
-    ...branches.map(v => ({ label: `Branch: ${v}`, clear: () => setBranches(branches.filter(x => x !== v)) })),
-    ...kabkots.map(v => ({ label: `Kab: ${v}`, clear: () => setKabkots(kabkots.filter(x => x !== v)) })),
-    ...channelGroups.map(v => ({ label: `Ch: ${v}`, clear: () => setChannelGroups(channelGroups.filter(x => x !== v)) })),
-    ...kpis.map(v => ({ label: `KPI: ${v}`, clear: () => setKpis(kpis.filter(x => x !== v)) })),
-    ...atlBtl.map(v => ({ label: v, clear: () => setAtlBtl(atlBtl.filter(x => x !== v)) })),
-    ...tenures.map(v => ({ label: `Tenure: ${v}`, clear: () => setTenures(tenures.filter(x => x !== v)) })),
-    ...productFamilies.map(v => ({ label: `Prod: ${v}`, clear: () => setProductFamilies(productFamilies.filter(x => x !== v)) })),
-  ];
+  const showDD = channelGroups.includes("DIGITAL DISTRIBUTION") || channelDetails.some(d => d.toLowerCase().includes("dd"));
 
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6">
         {/* Header */}
-        <div>
+        <div className="border-l-4 border-amber-500 pl-4">
           <h1 className="text-xl font-bold text-white">Product Analysis</h1>
-          <p className="text-sm text-gray-400 mt-1">
-            MTD vs LMTD variance by product dimension
-            {mtdMonth && <> · <span className="text-amber-400">MTD: {getMonthLabel(mtdMonth)}</span></>}
-            {lmtdMonth && <> · <span className="text-gray-300">LMTD: {getMonthLabel(lmtdMonth)}</span></>}
+          <p className="text-sm text-gray-400 mt-0.5">
+            MTD vs LMTD variance by product, channel, branch and tenure
+            {mtdLabel && <> · <span className="text-amber-400">MTD: {mtdLabel}</span> · <span className="text-gray-300">LMTD: {lmtdLabel}</span> · <span className="text-gray-300">Last FM: {lastFmLabel}</span></>}
           </p>
         </div>
 
-        {/* Brand toggle */}
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-400 font-medium">Brand</span>
-          {["IOH (Combined)", "IM3", "3ID"].map((b) => {
-            const active = b === "IOH (Combined)" ? brands.length === 0 : brands.includes(b);
-            return (
-              <button
-                key={b}
-                onClick={() => {
-                  if (b === "IOH (Combined)") setBrands([]);
-                  else setBrands([b]);
-                }}
-                className={`px-3 py-1 rounded text-sm font-semibold border transition-colors ${
-                  active ? "bg-amber-500 border-amber-500 text-black" : "bg-transparent border-gray-600 text-gray-300 hover:border-amber-400"
-                }`}
-              >
-                {b}
-              </button>
-            );
-          })}
+        {/* ── FILTER PANEL ── */}
+        <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 space-y-3">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xs font-bold uppercase tracking-widest text-amber-500">FILTER</span>
+          </div>
+
+          {/* Primary filters matching Excel template */}
+          <FilterRow
+            label="BRANCH"
+            options={dims?.branches ?? []}
+            selected={branches}
+            onChange={setBranches}
+          />
+          <FilterRow
+            label="BRAND"
+            options={["IM3", "3ID"]}
+            selected={brands}
+            onChange={setBrands}
+          />
+          <FilterRow
+            label="ATL / BTL"
+            options={dims?.atlBtl ?? []}
+            selected={atlBtl}
+            onChange={setAtlBtl}
+          />
+          <FilterRow
+            label="TENURE SLABS"
+            options={dims?.tenures ?? []}
+            selected={tenures}
+            onChange={setTenures}
+          />
+
+          {/* Divider + secondary filters */}
+          <div className="border-t border-gray-700 pt-3 space-y-3">
+            <FilterRow
+              label="CHANNEL GROUP"
+              options={dims?.channelGroups ?? []}
+              selected={channelGroups}
+              onChange={setChannelGroups}
+            />
+            <FilterRow
+              label="CHANNEL DETAIL"
+              options={dims?.channelDetails ?? []}
+              selected={channelDetails}
+              onChange={setChannelDetails}
+            />
+            {(showDD || showMerchantFilter) && (
+              <FilterRow
+                label="MERCHANT (DD)"
+                options={dims?.merchants ?? []}
+                selected={merchants}
+                onChange={setMerchants}
+              />
+            )}
+            <FilterRow
+              label="KPI TYPE"
+              options={dims?.kpis ?? []}
+              selected={kpis}
+              onChange={setKpis}
+            />
+            <FilterRow
+              label="PRODUCT"
+              options={dims?.productFamilies ?? []}
+              selected={productFamilies}
+              onChange={setProductFamilies}
+            />
+          </div>
+
+          {/* Controls row */}
+          <div className="flex items-center gap-6 pt-2 border-t border-gray-700">
+            <div className="flex items-center gap-2">
+              <Switch
+                id="merchant-toggle"
+                checked={showMerchantFilter}
+                onCheckedChange={setShowMerchantFilter}
+              />
+              <Label htmlFor="merchant-toggle" className="text-sm text-gray-300">Show Merchant Filter</Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-400">Top / Bottom N:</span>
+              {[10, 20, 30, 50].map(n => (
+                <PillToggle key={n} label={String(n)} active={topN === n} onClick={() => setTopN(n)} />
+              ))}
+            </div>
+          </div>
         </div>
 
-        {/* Active filter chips */}
-        {activeFilters.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {activeFilters.map((f, i) => (
-              <Badge key={i} variant="secondary" className="bg-amber-500/20 text-amber-300 border border-amber-500/40 cursor-pointer" onClick={f.clear}>
-                {f.label} ×
-              </Badge>
-            ))}
-            <button className="text-xs text-gray-400 hover:text-white" onClick={() => {
-              setBranches([]); setKabkots([]); setChannelGroups([]); setChannelDetails([]);
-              setAtlBtl([]); setTenures([]); setMerchants([]); setKpis([]); setProductFamilies([]);
-            }}>Clear all</button>
+        {isLoading ? (
+          <div className="space-y-4">
+            <Skeleton className="h-48 w-full" />
+            <Skeleton className="h-64 w-full" />
+            <Skeleton className="h-64 w-full" />
           </div>
+        ) : (
+          <>
+            {/* ── TABLE 1: Summary by Branch / Channel / Tenure ── */}
+            <div className="space-y-4">
+              <h2 className="text-base font-bold text-amber-400 uppercase tracking-wide">
+                Summary View — Selections: Contributions
+              </h2>
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                <VarianceTable
+                  title="By Branch"
+                  rows={branchData.rows}
+                  mtdLabel={mtdLabel}
+                  lmtdLabel={lmtdLabel}
+                  lastFmLabel={lastFmLabel}
+                />
+                <VarianceTable
+                  title="By Channel"
+                  rows={channelData.rows}
+                  mtdLabel={mtdLabel}
+                  lmtdLabel={lmtdLabel}
+                  lastFmLabel={lastFmLabel}
+                />
+                <VarianceTable
+                  title="By Tenure"
+                  rows={tenureData.rows}
+                  mtdLabel={mtdLabel}
+                  lmtdLabel={lmtdLabel}
+                  lastFmLabel={lastFmLabel}
+                />
+              </div>
+            </div>
+
+            {/* ── TABLE 2: Bottom N Products Lost ── */}
+            <div className="space-y-2">
+              <h2 className="text-base font-bold text-red-400 uppercase tracking-wide">
+                Selections Bottom {topN} Product Lost — Short by Highest Gap
+              </h2>
+              <VarianceTable
+                title={`Bottom ${topN} Products by Revenue Gap (MTD vs LMTD)`}
+                subtitle="By Branch · Channel Detail · Product Group — sorted by largest negative gap"
+                rows={bottomN}
+                mtdLabel={mtdLabel}
+                lmtdLabel={lmtdLabel}
+                lastFmLabel={lastFmLabel}
+                highlight="bottom"
+              />
+            </div>
+
+            {/* ── TABLE 3: Top N Products Gain ── */}
+            <div className="space-y-2">
+              <h2 className="text-base font-bold text-emerald-400 uppercase tracking-wide">
+                Selections Top {topN} Product Gain — Highest Growth
+              </h2>
+              <VarianceTable
+                title={`Top ${topN} Products by Revenue Gain (MTD vs LMTD)`}
+                subtitle="By Branch · Channel Detail · Product Group — sorted by largest positive gap"
+                rows={topN_rows}
+                mtdLabel={mtdLabel}
+                lmtdLabel={lmtdLabel}
+                lastFmLabel={lastFmLabel}
+                highlight="top"
+              />
+            </div>
+          </>
         )}
-
-        <div className="flex gap-6">
-          {/* ── Left filter panel ── */}
-          <div className="w-64 shrink-0 space-y-5 bg-gray-900 border border-gray-700 rounded-lg p-4">
-            <h3 className="text-sm font-semibold text-gray-200 uppercase tracking-wide">Filters</h3>
-
-            {dims ? (
-              <>
-                <MultiSelect label="Branch" options={dims.branches} selected={branches} onChange={setBranches} />
-                <MultiSelect label="Kabupaten" options={dims.kabkots} selected={kabkots} onChange={setKabkots} />
-                <MultiSelect label="Channel Group" options={dims.channelGroups} selected={channelGroups} onChange={setChannelGroups} />
-                <MultiSelect label="Channel Detail" options={dims.channelDetails} selected={channelDetails} onChange={setChannelDetails} />
-                <MultiSelect label="ATL / BTL" options={dims.atlBtl} selected={atlBtl} onChange={setAtlBtl} />
-                <MultiSelect label="Tenure" options={dims.tenures} selected={tenures} onChange={setTenures} />
-                <MultiSelect label="KPI Type" options={dims.kpis} selected={kpis} onChange={setKpis} />
-                <MultiSelect label="Product Family" options={dims.productFamilies} selected={productFamilies} onChange={setProductFamilies} />
-                {(channelGroups.includes("DIGITAL DISTRIBUTION") || channelGroups.length === 0) && (
-                  <MultiSelect label="Merchant (DD)" options={dims.merchants} selected={merchants} onChange={setMerchants} />
-                )}
-              </>
-            ) : (
-              <div className="space-y-2">{[...Array(6)].map((_, i) => <Skeleton key={i} className="h-6 w-full" />)}</div>
-            )}
-          </div>
-
-          {/* ── Main content ── */}
-          <div className="flex-1 space-y-4">
-            {/* Group By selector */}
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-400 font-medium">Group by</span>
-              <div className="flex flex-wrap gap-1">
-                {GROUP_BY_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.value}
-                    onClick={() => setGroupBy(opt.value)}
-                    className={`px-3 py-1 rounded text-sm border transition-colors ${
-                      groupBy === opt.value
-                        ? "bg-indigo-600 border-indigo-500 text-white font-semibold"
-                        : "bg-gray-800 border-gray-600 text-gray-300 hover:border-indigo-400"
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Summary KPI row */}
-            {!isLoading && totalMtd > 0 && (
-              <div className="grid grid-cols-4 gap-3">
-                {[
-                  { label: "Total MTD", value: fmtRev(totalMtd), sub: null },
-                  { label: "Total LMTD", value: fmtRev(totalLmtd), sub: null },
-                  { label: "GAP (MTD−LMTD)", value: fmtRev(totalMtd - totalLmtd), sub: null, gap: true },
-                  { label: "Growth", value: null, pct: calcGrowth(totalMtd, totalLmtd) },
-                ].map((card, i) => (
-                  <div key={i} className="bg-gray-900 border border-gray-700 rounded-lg p-3">
-                    <div className="text-xs text-gray-400 uppercase tracking-wide">{card.label}</div>
-                    <div className={`text-xl font-bold mt-1 ${card.gap ? (totalMtd >= totalLmtd ? "text-emerald-400" : "text-red-400") : "text-white"}`}>
-                      {card.value ?? <GrowthBadge pct={card.pct ?? null} />}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Variance table */}
-            <div className="bg-gray-900 border border-gray-700 rounded-lg overflow-hidden">
-              <div className="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
-                <h2 className="text-base font-semibold text-white">
-                  {GROUP_BY_OPTIONS.find(o => o.value === groupBy)?.label} — MTD vs LMTD Variance
-                </h2>
-                <span className="text-xs text-gray-500">{tableRows.length} rows</span>
-              </div>
-
-              {isLoading ? (
-                <div className="p-4 space-y-2">{[...Array(8)].map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}</div>
-              ) : tableRows.length === 0 ? (
-                <div className="p-8 text-center text-gray-500">No data for selected filters</div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm data-table">
-                    <thead>
-                      <tr className="text-xs uppercase text-gray-400 border-b border-gray-700">
-                        <th className="text-left px-4 py-3">{GROUP_BY_OPTIONS.find(o => o.value === groupBy)?.label}</th>
-                        <th className="text-left px-3 py-3">Brand</th>
-                        <th className="text-right px-3 py-3">MTD</th>
-                        <th className="text-right px-3 py-3">LMTD</th>
-                        <th className="text-right px-3 py-3">GAP</th>
-                        <th className="text-right px-3 py-3">Growth %</th>
-                        <th className="text-right px-3 py-3">Mix MTD %</th>
-                        <th className="text-right px-3 py-3">ANOVA Impact %</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tableRows.map((row, ri) => {
-                        const totalGap = totalMtd - totalLmtd;
-                        const rowGap = row.iohMtd - row.iohLmtd;
-                        const anovaImpact = totalGap !== 0 ? (rowGap / Math.abs(totalGap)) * 100 : null;
-                        const mixMtd = totalMtd > 0 ? (row.iohMtd / totalMtd) * 100 : null;
-
-                        // Show brand breakdown if more than one brand
-                        const showBrandBreakdown = row.brands.length > 1;
-
-                        return (
-                          <>
-                            {/* IOH summary row */}
-                            <tr key={`${ri}-ioh`} className={`border-b border-gray-800 ${ri % 2 === 0 ? "bg-gray-900" : "bg-gray-850"} hover:bg-gray-800 transition-colors`}>
-                              <td className="px-4 py-2.5 font-semibold text-white">{row.dimension}</td>
-                              <td className="px-3 py-2.5">
-                                <span className="px-2 py-0.5 rounded text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">IOH</span>
-                              </td>
-                              <td className="px-3 py-2.5 text-right text-white font-medium">{fmtRev(row.iohMtd)}</td>
-                              <td className="px-3 py-2.5 text-right text-gray-300">{fmtRev(row.iohLmtd)}</td>
-                              <td className={`px-3 py-2.5 text-right font-semibold ${rowGap >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                                {rowGap >= 0 ? "+" : ""}{fmtRev(rowGap)}
-                              </td>
-                              <td className="px-3 py-2.5 text-right"><GrowthBadge pct={calcGrowth(row.iohMtd, row.iohLmtd)} /></td>
-                              <td className="px-3 py-2.5 text-right text-amber-300">{mixMtd != null ? mixMtd.toFixed(1) + "%" : "—"}</td>
-                              <td className={`px-3 py-2.5 text-right font-semibold ${anovaImpact == null ? "text-gray-500" : anovaImpact >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                                {anovaImpact != null ? (anovaImpact >= 0 ? "+" : "") + anovaImpact.toFixed(1) + "%" : "—"}
-                              </td>
-                            </tr>
-                            {/* Brand breakdown rows */}
-                            {showBrandBreakdown && row.brands.map((br) => {
-                              const brGap = br.mtd - br.lmtd;
-                              return (
-                                <tr key={`${ri}-${br.brand}`} className="border-b border-gray-800/50 bg-gray-800/30 hover:bg-gray-800/60 transition-colors">
-                                  <td className="px-4 py-2 pl-8 text-gray-400 text-xs">↳ {row.dimension}</td>
-                                  <td className="px-3 py-2">
-                                    <span className={`px-2 py-0.5 rounded text-xs font-bold border ${br.brand === "IM3" ? "bg-yellow-500/20 text-yellow-300 border-yellow-500/30" : "bg-blue-500/20 text-blue-300 border-blue-500/30"}`}>
-                                      {br.brand}
-                                    </span>
-                                  </td>
-                                  <td className="px-3 py-2 text-right text-gray-300 text-xs">{fmtRev(br.mtd)}</td>
-                                  <td className="px-3 py-2 text-right text-gray-400 text-xs">{fmtRev(br.lmtd)}</td>
-                                  <td className={`px-3 py-2 text-right text-xs font-medium ${brGap >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                                    {brGap >= 0 ? "+" : ""}{fmtRev(brGap)}
-                                  </td>
-                                  <td className="px-3 py-2 text-right text-xs"><GrowthBadge pct={calcGrowth(br.mtd, br.lmtd)} /></td>
-                                  <td className="px-3 py-2 text-right text-xs text-gray-500">—</td>
-                                  <td className="px-3 py-2 text-right text-xs text-gray-500">—</td>
-                                </tr>
-                              );
-                            })}
-                          </>
-                        );
-                      })}
-                    </tbody>
-                    {/* Total row */}
-                    <tfoot>
-                      <tr className="border-t-2 border-amber-500/50 bg-gray-800">
-                        <td className="px-4 py-3 font-bold text-amber-300" colSpan={2}>TOTAL</td>
-                        <td className="px-3 py-3 text-right font-bold text-white">{fmtRev(totalMtd)}</td>
-                        <td className="px-3 py-3 text-right font-bold text-gray-300">{fmtRev(totalLmtd)}</td>
-                        <td className={`px-3 py-3 text-right font-bold ${totalMtd >= totalLmtd ? "text-emerald-400" : "text-red-400"}`}>
-                          {totalMtd >= totalLmtd ? "+" : ""}{fmtRev(totalMtd - totalLmtd)}
-                        </td>
-                        <td className="px-3 py-3 text-right font-bold"><GrowthBadge pct={calcGrowth(totalMtd, totalLmtd)} /></td>
-                        <td className="px-3 py-3 text-right font-bold text-amber-300">100.0%</td>
-                        <td className="px-3 py-3 text-right font-bold text-amber-300">100.0%</td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
       </div>
     </DashboardLayout>
   );
