@@ -217,8 +217,14 @@
   padding-top: 0.5rem;
   padding-bottom: 0.5rem;
 }
+.data-table tbody tr:nth-child(even) td {
+  background: oklch(0.17 0.025 250);
+}
+.data-table tbody tr:nth-child(odd) td {
+  background: oklch(0.14 0.022 250);
+}
 .data-table tr:hover td {
-  background: oklch(0.20 0.03 250);
+  background: oklch(0.22 0.035 250) !important;
 }
 
 /* ─── Badge brand ────────────────────────────────────────────────────────── */

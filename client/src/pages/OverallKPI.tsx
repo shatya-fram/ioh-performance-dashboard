@@ -71,7 +71,7 @@ function KpiCard({
         <span className="text-sm text-muted-foreground">{unit}</span>
       </div>
       <div className="mb-2">
-        <span className="text-2xl font-bold text-foreground">{fmt(mtdValue)}</span>
+        <span className="text-3xl font-bold text-foreground">{fmt(mtdValue)}</span>
       </div>
       <div className="flex items-center gap-2">
         <span className={`flex items-center gap-1 text-sm font-semibold ${isPositive ? "value-positive" : "value-negative"}`}>
@@ -138,11 +138,11 @@ function ChartDataLabel({ x, y, value, divisor, width }: any) {
   return (
     <text
       x={cx}
-      y={(y ?? 0) - 5}
+      y={(y ?? 0) - 8}
       textAnchor="middle"
-      fontSize={9}
-      fill="oklch(0.75 0.02 250)"
-      fontWeight={500}
+      fontSize={12}
+      fill="oklch(0.90 0.02 250)"
+      fontWeight={600}
     >
       {label}
     </text>
@@ -194,7 +194,7 @@ function MiniKpiCard({
         <span className="text-sm text-muted-foreground">{unit}</span>
       </div>
       <div className="mb-1">
-        <span className="text-xl font-bold text-foreground">{fmt(mtdValue)}</span>
+        <span className="text-2xl font-bold text-foreground">{fmt(mtdValue)}</span>
       </div>
       <div className="flex items-center gap-2">
         <span className={`flex items-center gap-1 text-sm font-semibold ${isPos ? "value-positive" : "value-negative"}`}>
@@ -598,20 +598,20 @@ export default function OverallKPI() {
                   <XAxis
                     dataKey="yearMonth"
                     tickFormatter={monthLabel}
-                    tick={{ fontSize: 11, fill: "oklch(0.60 0.02 250)" }}
+                    tick={{ fontSize: 13, fill: "oklch(0.72 0.02 250)" }}
                     axisLine={false}
                     tickLine={false}
                   />
                   <YAxis
                     tickFormatter={(v) => formatNumber(v / activeDivisor, 0)}
-                    tick={{ fontSize: 11, fill: "oklch(0.60 0.02 250)" }}
+                    tick={{ fontSize: 13, fill: "oklch(0.72 0.02 250)" }}
                     axisLine={false}
                     tickLine={false}
-                    width={60}
+                    width={68}
                   />
                   <Tooltip content={<CustomTooltip fieldName={activeKpi} />} />
                   <Legend
-                    wrapperStyle={{ fontSize: "11px", paddingTop: "12px" }}
+                    wrapperStyle={{ fontSize: "13px", paddingTop: "12px" }}
                     formatter={(v) => <span style={{ color: "oklch(0.75 0.02 250)" }}>{v}</span>}
                   />
                   {filter.brand === "Combined"
@@ -661,20 +661,20 @@ export default function OverallKPI() {
                   <XAxis
                     dataKey="yearMonth"
                     tickFormatter={monthLabel}
-                    tick={{ fontSize: 11, fill: "oklch(0.60 0.02 250)" }}
+                    tick={{ fontSize: 13, fill: "oklch(0.72 0.02 250)" }}
                     axisLine={false}
                     tickLine={false}
                   />
                   <YAxis
                     tickFormatter={(v) => formatNumber(v / activeDivisor, 0)}
-                    tick={{ fontSize: 11, fill: "oklch(0.60 0.02 250)" }}
+                    tick={{ fontSize: 13, fill: "oklch(0.72 0.02 250)" }}
                     axisLine={false}
                     tickLine={false}
-                    width={60}
+                    width={68}
                   />
                   <Tooltip content={<CustomTooltip fieldName={activeKpi} />} />
                   <Legend
-                    wrapperStyle={{ fontSize: "11px", paddingTop: "12px" }}
+                    wrapperStyle={{ fontSize: "13px", paddingTop: "12px" }}
                     formatter={(v) => <span style={{ color: "oklch(0.75 0.02 250)" }}>{v}</span>}
                   />
                   {filter.brand === "Combined"

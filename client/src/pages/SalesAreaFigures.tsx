@@ -21,6 +21,7 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
+  LabelList,
 } from "recharts";
 import { MapPin, TrendingUp, TrendingDown } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -191,35 +192,35 @@ export default function SalesAreaFigures() {
               </div>
             </div>
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={fmByMonthBrand} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+              <LineChart data={fmByMonthBrand} margin={{ top: 28, right: 20, left: 10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.25 0.03 250)" vertical={false} />
                 <XAxis
                   dataKey="yearMonth"
                   tickFormatter={monthLabel}
-                  tick={{ fontSize: 11, fill: "oklch(0.60 0.02 250)" }}
+                  tick={{ fontSize: 13, fill: "oklch(0.72 0.02 250)" }}
                   axisLine={false}
                   tickLine={false}
                 />
                 <YAxis
                   tickFormatter={(v) => formatNumber(v / (KPI_FIELDS[activeKpi]?.divisor ?? 1), 0)}
-                  tick={{ fontSize: 11, fill: "oklch(0.60 0.02 250)" }}
+                  tick={{ fontSize: 13, fill: "oklch(0.72 0.02 250)" }}
                   axisLine={false}
                   tickLine={false}
-                  width={60}
+                  width={68}
                 />
                 <Tooltip
                   contentStyle={{
                     background: "oklch(0.14 0.022 250)",
                     border: "1px solid oklch(0.25 0.03 250)",
                     borderRadius: "8px",
-                    fontSize: "11px",
+                    fontSize: "13px",
                   }}
                   formatter={(v: any) => [
                     `${formatNumber(v / (KPI_FIELDS[activeKpi]?.divisor ?? 1), 2)} ${KPI_FIELDS[activeKpi]?.unit ?? ""}`,
                   ]}
                   labelFormatter={monthLabel}
                 />
-                <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "12px" }} />
+                <Legend wrapperStyle={{ fontSize: "13px", paddingTop: "12px" }} />
                 {filter.brand === "Combined"
                   ? brands.map((brand) => (
                       <Line
@@ -229,9 +230,22 @@ export default function SalesAreaFigures() {
                         name={brand}
                         stroke={BRAND_COLORS[brand]}
                         strokeWidth={2}
-                        dot={false}
-                        activeDot={{ r: 4, strokeWidth: 0 }}
-                      />
+                        dot={{ r: 3, strokeWidth: 0, fill: BRAND_COLORS[brand] }}
+                        activeDot={{ r: 5, strokeWidth: 0 }}
+                      >
+                        <LabelList
+                          dataKey={`${brand}_${activeKpi}`}
+                          position="top"
+                          content={(props: any) => {
+                            const { x, y, value } = props;
+                            if (!value) return null;
+                            const div = KPI_FIELDS[activeKpi]?.divisor ?? 1;
+                            const scaled = value / div;
+                            const lbl = Math.abs(scaled) >= 1000 ? `${(scaled/1000).toFixed(1)}K` : Math.abs(scaled) >= 1 ? scaled.toFixed(1) : scaled.toFixed(2);
+                            return <text x={x} y={(y ?? 0) - 8} textAnchor="middle" fontSize={11} fill="oklch(0.88 0.02 250)" fontWeight={600}>{lbl}</text>;
+                          }}
+                        />
+                      </Line>
                     ))
                   : (
                       <Line
@@ -240,9 +254,22 @@ export default function SalesAreaFigures() {
                         name={filter.brand}
                         stroke={BRAND_COLORS[filter.brand]}
                         strokeWidth={2.5}
-                        dot={false}
+                        dot={{ r: 3, strokeWidth: 0, fill: BRAND_COLORS[filter.brand] }}
                         activeDot={{ r: 5, strokeWidth: 0 }}
-                      />
+                      >
+                        <LabelList
+                          dataKey={activeKpi}
+                          position="top"
+                          content={(props: any) => {
+                            const { x, y, value } = props;
+                            if (!value) return null;
+                            const div = KPI_FIELDS[activeKpi]?.divisor ?? 1;
+                            const scaled = value / div;
+                            const lbl = Math.abs(scaled) >= 1000 ? `${(scaled/1000).toFixed(1)}K` : Math.abs(scaled) >= 1 ? scaled.toFixed(1) : scaled.toFixed(2);
+                            return <text x={x} y={(y ?? 0) - 8} textAnchor="middle" fontSize={11} fill="oklch(0.88 0.02 250)" fontWeight={600}>{lbl}</text>;
+                          }}
+                        />
+                      </Line>
                     )}
               </LineChart>
             </ResponsiveContainer>
