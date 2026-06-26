@@ -489,3 +489,42 @@ export async function getProductAnalysis(filter: ProductFilter) {
     .groupBy(groupCol, productMtdRaw.brand, productMtdRaw.yearMonth)
     .orderBy(desc(sql`SUM(rev)`));
 }
+
+// ─── Product Detail query (for Bottom/Top N tables) ───────────────────────────
+// Groups by productGroup + channelDetail + atlBtl so each row carries Svc Type and Channel Detail
+export async function getProductDetail(filter: ProductFilter) {
+  const db = await getDb();
+  if (!db) return [];
+  const conditions = [];
+  if (filter.brands?.length) conditions.push(inArray(productMtdRaw.brand, filter.brands));
+  if (filter.branches?.length) conditions.push(inArray(productMtdRaw.areaBranch, filter.branches));
+  if (filter.kabkots?.length) conditions.push(inArray(productMtdRaw.areaKabkot, filter.kabkots));
+  if (filter.channelGroups?.length) conditions.push(inArray(productMtdRaw.channelGroup, filter.channelGroups));
+  if (filter.channelDetails?.length) conditions.push(inArray(productMtdRaw.channelDetail, filter.channelDetails));
+  if (filter.atlBtl?.length) conditions.push(inArray(productMtdRaw.atlBtl, filter.atlBtl));
+  if (filter.tenures?.length) conditions.push(inArray(productMtdRaw.tenure, filter.tenures));
+  if (filter.merchants?.length) conditions.push(inArray(productMtdRaw.merchant, filter.merchants));
+  if (filter.kpis?.length) conditions.push(inArray(productMtdRaw.kpi, filter.kpis));
+  if (filter.productFamilies?.length) conditions.push(inArray(productMtdRaw.productFamily, filter.productFamilies));
+  if (filter.productGroups?.length) conditions.push(inArray(productMtdRaw.productGroup, filter.productGroups));
+  if (filter.yearMonths?.length) conditions.push(inArray(productMtdRaw.yearMonth, filter.yearMonths));
+  return db
+    .select({
+      productGroup: productMtdRaw.productGroup,
+      channelDetail: productMtdRaw.channelDetail,
+      atlBtl: productMtdRaw.atlBtl,
+      brand: productMtdRaw.brand,
+      yearMonth: productMtdRaw.yearMonth,
+      totalRev: sql<number>`SUM(rev)`,
+    })
+    .from(productMtdRaw)
+    .where(conditions.length ? and(...conditions) : undefined)
+    .groupBy(
+      productMtdRaw.productGroup,
+      productMtdRaw.channelDetail,
+      productMtdRaw.atlBtl,
+      productMtdRaw.brand,
+      productMtdRaw.yearMonth
+    )
+    .orderBy(desc(sql`SUM(rev)`));
+}

@@ -19,6 +19,7 @@ import {
   getLatestUpload,
   getProductDimensions,
   getProductAnalysis,
+  getProductDetail,
   type ProductFilter,
 } from "./db";
 
@@ -137,6 +138,24 @@ export const appRouter = router({
         })
       )
       .query(({ input }) => getProductAnalysis(input as ProductFilter)),
+    detail: publicProcedure
+      .input(
+        z.object({
+          brands: z.array(z.string()).optional(),
+          branches: z.array(z.string()).optional(),
+          kabkots: z.array(z.string()).optional(),
+          channelGroups: z.array(z.string()).optional(),
+          channelDetails: z.array(z.string()).optional(),
+          atlBtl: z.array(z.string()).optional(),
+          tenures: z.array(z.string()).optional(),
+          merchants: z.array(z.string()).optional(),
+          kpis: z.array(z.string()).optional(),
+          productFamilies: z.array(z.string()).optional(),
+          productGroups: z.array(z.string()).optional(),
+          yearMonths: z.array(z.string()).optional(),
+        })
+      )
+      .query(({ input }) => getProductDetail(input as ProductFilter)),
   }),
 });
 
