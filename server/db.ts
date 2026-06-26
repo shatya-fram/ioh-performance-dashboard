@@ -11,6 +11,7 @@ import {
   kpiConfig,
   kecRank,
   dataUploads,
+  productMtdRaw,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -395,4 +396,96 @@ export async function getKecRankData(filter: { kabkots?: string[] }) {
     .from(kecRank)
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(desc(kecRank.im3Gap));
+}
+
+
+// ─── Product MTD queries ──────────────────────────────────────────────────────
+
+export type ProductFilter = {
+  brands?: string[];
+  branches?: string[];
+  kabkots?: string[];
+  channelGroups?: string[];
+  channelDetails?: string[];
+  atlBtl?: string[];
+  tenures?: string[];
+  merchants?: string[];
+  kpis?: string[];
+  productFamilies?: string[];
+  productGroups?: string[];
+  yearMonths?: string[];
+  groupBy?: "channelGroup" | "channelDetail" | "atlBtl" | "tenure" | "merchant" | "productFamily" | "productGroup" | "kpi" | "brand" | "areaBranch" | "areaKabkot";
+};
+
+export async function getProductDimensions() {
+  const db = await getDb();
+  if (!db) return { branches: [], kabkots: [], channelGroups: [], channelDetails: [], atlBtl: [], tenures: [], merchants: [], kpis: [], productFamilies: [] };
+  const [branches, kabkots, channelGroups, channelDetails, atlBtlVals, tenures, merchants, kpis, productFamilies] = await Promise.all([
+    db.selectDistinct({ v: productMtdRaw.areaBranch }).from(productMtdRaw).where(sql`areaBranch IS NOT NULL`).orderBy(asc(productMtdRaw.areaBranch)),
+    db.selectDistinct({ v: productMtdRaw.areaKabkot }).from(productMtdRaw).where(sql`areaKabkot IS NOT NULL`).orderBy(asc(productMtdRaw.areaKabkot)),
+    db.selectDistinct({ v: productMtdRaw.channelGroup }).from(productMtdRaw).where(sql`channelGroup IS NOT NULL`).orderBy(asc(productMtdRaw.channelGroup)),
+    db.selectDistinct({ v: productMtdRaw.channelDetail }).from(productMtdRaw).where(sql`channelDetail IS NOT NULL`).orderBy(asc(productMtdRaw.channelDetail)),
+    db.selectDistinct({ v: productMtdRaw.atlBtl }).from(productMtdRaw).where(sql`atlBtl IS NOT NULL`).orderBy(asc(productMtdRaw.atlBtl)),
+    db.selectDistinct({ v: productMtdRaw.tenure }).from(productMtdRaw).where(sql`tenure IS NOT NULL`).orderBy(asc(productMtdRaw.tenure)),
+    db.selectDistinct({ v: productMtdRaw.merchant }).from(productMtdRaw).where(sql`merchant IS NOT NULL`).orderBy(asc(productMtdRaw.merchant)),
+    db.selectDistinct({ v: productMtdRaw.kpi }).from(productMtdRaw).where(sql`kpi IS NOT NULL`).orderBy(asc(productMtdRaw.kpi)),
+    db.selectDistinct({ v: productMtdRaw.productFamily }).from(productMtdRaw).where(sql`productFamily IS NOT NULL`).orderBy(asc(productMtdRaw.productFamily)),
+  ]);
+  return {
+    branches: branches.map(r => r.v!),
+    kabkots: kabkots.map(r => r.v!),
+    channelGroups: channelGroups.map(r => r.v!),
+    channelDetails: channelDetails.map(r => r.v!),
+    atlBtl: atlBtlVals.map(r => r.v!),
+    tenures: tenures.map(r => r.v!),
+    merchants: merchants.map(r => r.v!),
+    kpis: kpis.map(r => r.v!),
+    productFamilies: productFamilies.map(r => r.v!),
+  };
+}
+
+export async function getProductAnalysis(filter: ProductFilter) {
+  const db = await getDb();
+  if (!db) return [];
+  const conditions = [];
+  if (filter.brands?.length) conditions.push(inArray(productMtdRaw.brand, filter.brands));
+  if (filter.branches?.length) conditions.push(inArray(productMtdRaw.areaBranch, filter.branches));
+  if (filter.kabkots?.length) conditions.push(inArray(productMtdRaw.areaKabkot, filter.kabkots));
+  if (filter.channelGroups?.length) conditions.push(inArray(productMtdRaw.channelGroup, filter.channelGroups));
+  if (filter.channelDetails?.length) conditions.push(inArray(productMtdRaw.channelDetail, filter.channelDetails));
+  if (filter.atlBtl?.length) conditions.push(inArray(productMtdRaw.atlBtl, filter.atlBtl));
+  if (filter.tenures?.length) conditions.push(inArray(productMtdRaw.tenure, filter.tenures));
+  if (filter.merchants?.length) conditions.push(inArray(productMtdRaw.merchant, filter.merchants));
+  if (filter.kpis?.length) conditions.push(inArray(productMtdRaw.kpi, filter.kpis));
+  if (filter.productFamilies?.length) conditions.push(inArray(productMtdRaw.productFamily, filter.productFamilies));
+  if (filter.productGroups?.length) conditions.push(inArray(productMtdRaw.productGroup, filter.productGroups));
+  if (filter.yearMonths?.length) conditions.push(inArray(productMtdRaw.yearMonth, filter.yearMonths));
+
+  const groupByCol = filter.groupBy || "channelGroup";
+  const colMap: Record<string, any> = {
+    channelGroup: productMtdRaw.channelGroup,
+    channelDetail: productMtdRaw.channelDetail,
+    atlBtl: productMtdRaw.atlBtl,
+    tenure: productMtdRaw.tenure,
+    merchant: productMtdRaw.merchant,
+    productFamily: productMtdRaw.productFamily,
+    productGroup: productMtdRaw.productGroup,
+    kpi: productMtdRaw.kpi,
+    brand: productMtdRaw.brand,
+    areaBranch: productMtdRaw.areaBranch,
+    areaKabkot: productMtdRaw.areaKabkot,
+  };
+  const groupCol = colMap[groupByCol];
+
+  return db
+    .select({
+      dimension: groupCol,
+      brand: productMtdRaw.brand,
+      yearMonth: productMtdRaw.yearMonth,
+      totalRev: sql<number>`SUM(rev)`,
+    })
+    .from(productMtdRaw)
+    .where(conditions.length ? and(...conditions) : undefined)
+    .groupBy(groupCol, productMtdRaw.brand, productMtdRaw.yearMonth)
+    .orderBy(desc(sql`SUM(rev)`));
 }

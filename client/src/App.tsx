@@ -11,6 +11,7 @@ import VLRAnalysis from "./pages/VLRAnalysis";
 import ANOVAAnalysis from "./pages/ANOVAAnalysis";
 import SalesAreaFigures from "./pages/SalesAreaFigures";
 import DataUpload from "./pages/DataUpload";
+import ProductAnalysis from "./pages/ProductAnalysis";
 
 function Router() {
   return (
@@ -22,6 +23,7 @@ function Router() {
         <Route path="/anova" component={ANOVAAnalysis} />
         <Route path="/sales-area" component={SalesAreaFigures} />
         <Route path="/upload" component={DataUpload} />
+        <Route path="/product-analysis" component={ProductAnalysis} />
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />
       </Switch>

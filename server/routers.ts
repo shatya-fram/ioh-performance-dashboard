@@ -17,6 +17,9 @@ import {
   getKecRankData,
   getUploads,
   getLatestUpload,
+  getProductDimensions,
+  getProductAnalysis,
+  type ProductFilter,
 } from "./db";
 
 const FilterInput = z.object({
@@ -110,6 +113,30 @@ export const appRouter = router({
         })
       )
       .query(({ input }) => getVoucherGameData(input)),
+  }),
+
+  // ─── Product Analysis ─────────────────────────────────────────────────────
+  product: router({
+    dimensions: publicProcedure.query(() => getProductDimensions()),
+    analysis: publicProcedure
+      .input(
+        z.object({
+          brands: z.array(z.string()).optional(),
+          branches: z.array(z.string()).optional(),
+          kabkots: z.array(z.string()).optional(),
+          channelGroups: z.array(z.string()).optional(),
+          channelDetails: z.array(z.string()).optional(),
+          atlBtl: z.array(z.string()).optional(),
+          tenures: z.array(z.string()).optional(),
+          merchants: z.array(z.string()).optional(),
+          kpis: z.array(z.string()).optional(),
+          productFamilies: z.array(z.string()).optional(),
+          productGroups: z.array(z.string()).optional(),
+          yearMonths: z.array(z.string()).optional(),
+          groupBy: z.enum(["channelGroup","channelDetail","atlBtl","tenure","merchant","productFamily","productGroup","kpi","brand","areaBranch","areaKabkot"]).optional(),
+        })
+      )
+      .query(({ input }) => getProductAnalysis(input as ProductFilter)),
   }),
 });
 

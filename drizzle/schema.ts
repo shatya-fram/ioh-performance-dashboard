@@ -184,3 +184,29 @@ export const kecRank = mysqlTable("kec_rank", {
   threeidHvcGap: double("threeidHvcGap"),
   area: varchar("area", { length: 64 }),
 });
+
+// ─── Product MTD RAW ─────────────────────────────────────────────────────────
+export const productMtdRaw = mysqlTable("product_mtd_raw", {
+  id: int("id").autoincrement().primaryKey(),
+  yearMonth: varchar("yearMonth", { length: 8 }).notNull(),
+  brand: varchar("brand", { length: 16 }).notNull(),
+  areaRegion: varchar("areaRegion", { length: 64 }),
+  areaBranch: varchar("areaBranch", { length: 64 }),
+  areaKabkot: varchar("areaKabkot", { length: 64 }),
+  channelGroup: varchar("channelGroup", { length: 64 }),
+  channelDetail: varchar("channelDetail", { length: 64 }),
+  productFamily: varchar("productFamily", { length: 128 }),
+  productGroup: varchar("productGroup", { length: 256 }),
+  atlBtl: varchar("atlBtl", { length: 16 }),
+  atlBtlDetail: varchar("atlBtlDetail", { length: 64 }),
+  tenure: varchar("tenure", { length: 32 }),
+  merchant: varchar("merchant", { length: 128 }),
+  kpi: varchar("kpi", { length: 64 }).notNull(),
+  rev: bigint("rev", { mode: "number" }),
+}, (t) => [
+  index("prod_mtd_brand_month").on(t.brand, t.yearMonth),
+  index("prod_mtd_channel").on(t.channelGroup),
+  index("prod_mtd_kpi").on(t.kpi),
+  index("prod_mtd_branch").on(t.areaBranch),
+  index("prod_mtd_kabkot").on(t.areaKabkot),
+]);

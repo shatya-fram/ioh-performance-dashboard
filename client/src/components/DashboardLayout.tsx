@@ -30,6 +30,7 @@ import {
   Activity,
   MapPin,
   Wifi,
+  Package,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -43,6 +44,10 @@ const menuItems = [
   { icon: Activity,   label: "ANOVA Analysis",     path: "/anova",        description: "Revenue variance drivers" },
   { icon: MapPin,     label: "Sales Area Figures", path: "/sales-area",   description: "Area KPI performance" },
   { icon: Upload,     label: "Data Upload",        path: "/upload",       description: "Import Excel data" },
+];
+
+const productMenuItems = [
+  { icon: Package, label: "Product Analysis", path: "/product-analysis", description: "MTD/LMTD product variance" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "ioh-sidebar-width";
@@ -174,6 +179,37 @@ function DashboardLayoutContent({
             <SidebarMenu className="px-2 space-y-0.5">
               {menuItems.map((item) => {
                 const isActive = location === item.path || (item.path !== "/" && location.startsWith(item.path));
+                return (
+                  <SidebarMenuItem key={item.path}>
+                    <SidebarMenuButton
+                      isActive={isActive}
+                      onClick={() => setLocation(item.path)}
+                      tooltip={item.label}
+                      className={`h-10 transition-all rounded-lg ${
+                        isActive
+                          ? "bg-primary/10 text-primary border border-primary/20"
+                          : "text-sidebar-foreground hover:bg-sidebar-accent"
+                      }`}
+                    >
+                      <item.icon className={`h-4 w-4 shrink-0 ${isActive ? "text-primary" : ""}`} />
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-sm font-medium truncate">{item.label}</span>
+                      </div>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+
+            {/* Product Analysis group */}
+            {!isCollapsed && (
+              <div className="mx-2 mt-3 mb-1">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">Product</p>
+              </div>
+            )}
+            <SidebarMenu className="px-2 space-y-0.5">
+              {productMenuItems.map((item) => {
+                const isActive = location === item.path || location.startsWith(item.path);
                 return (
                   <SidebarMenuItem key={item.path}>
                     <SidebarMenuButton
