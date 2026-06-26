@@ -163,7 +163,7 @@ function DashboardLayoutContent({
                   <span className="font-bold text-sm tracking-tight text-gold-gradient truncate">
                     IOH Dashboard
                   </span>
-                  <span className="text-xs text-muted-foreground truncate">Inner Jakarta</span>
+                  <span className="text-sm text-muted-foreground truncate">Inner Jakarta</span>
                 </div>
               )}
             </div>
@@ -199,16 +199,16 @@ function DashboardLayoutContent({
             {/* Data status */}
             {!isCollapsed && (
               <div className="mx-3 mt-4 p-3 rounded-lg bg-sidebar-accent border border-sidebar-border">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Data Status</p>
+                <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-1">Data Status</p>
                 {latestUpload ? (
                   <div>
-                    <p className="text-xs text-foreground/80 truncate">{latestUpload.filename}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
+                    <p className="text-sm text-foreground/80 truncate">{latestUpload.filename}</p>
+                    <p className="text-sm text-muted-foreground mt-0.5">
                       {new Date(latestUpload.uploadedAt).toLocaleDateString()}
                     </p>
                   </div>
                 ) : (
-                  <p className="text-xs text-muted-foreground">No data loaded</p>
+                  <p className="text-sm text-muted-foreground">No data loaded</p>
                 )}
               </div>
             )}
@@ -220,14 +220,14 @@ function DashboardLayoutContent({
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-3 rounded-lg px-1 py-1 hover:bg-sidebar-accent transition-colors w-full text-left focus:outline-none">
                   <Avatar className="h-8 w-8 border border-sidebar-border shrink-0">
-                    <AvatarFallback className="text-xs font-semibold bg-primary/20 text-primary">
+                    <AvatarFallback className="text-sm font-semibold bg-primary/20 text-primary">
                       {user?.name?.charAt(0).toUpperCase() ?? "U"}
                     </AvatarFallback>
                   </Avatar>
                   {!isCollapsed && (
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium truncate">{user?.name || "User"}</p>
-                      <p className="text-xs text-muted-foreground truncate">{user?.email || ""}</p>
+                      <p className="text-sm font-medium truncate">{user?.name || "User"}</p>
+                      <p className="text-sm text-muted-foreground truncate">{user?.email || ""}</p>
                     </div>
                   )}
                 </button>

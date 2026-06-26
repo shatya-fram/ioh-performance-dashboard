@@ -123,6 +123,7 @@
     font-feature-settings: "cv11", "ss01";
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    font-size: 15px;
   }
   .flex {
     min-width: 0;
@@ -202,9 +203,19 @@
 }
 
 /* ─── Table ──────────────────────────────────────────────────────────────── */
+.data-table {
+  font-size: 0.8125rem; /* 13px */
+}
 .data-table th {
-  @apply text-xs font-semibold uppercase tracking-wider text-muted-foreground;
+  @apply font-semibold uppercase tracking-wider text-muted-foreground;
+  font-size: 0.75rem; /* 12px headers stay compact */
   background: oklch(0.18 0.025 250);
+  padding-top: 0.625rem;
+  padding-bottom: 0.625rem;
+}
+.data-table td {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
 }
 .data-table tr:hover td {
   background: oklch(0.20 0.03 250);

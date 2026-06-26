@@ -75,18 +75,18 @@ export function GlobalFilterBar() {
     <div className="filter-bar">
       <div className="flex items-center gap-2 text-muted-foreground">
         <Filter size={14} />
-        <span className="text-xs font-semibold uppercase tracking-wider">Filters</span>
+        <span className="text-sm font-semibold uppercase tracking-wider">Filters</span>
       </div>
 
       {/* Brand */}
       <div className="flex items-center gap-2">
-        <span className="text-xs text-muted-foreground whitespace-nowrap">Brand</span>
+        <span className="text-sm text-muted-foreground whitespace-nowrap">Brand</span>
         <div className="flex gap-1">
           {BRAND_OPTIONS.map((opt) => (
             <button
               key={opt.value}
               onClick={() => setBrand(opt.value)}
-              className={`px-3 py-1 rounded-md text-xs font-medium transition-all duration-150 ${
+              className={`px-3 py-1 rounded-md text-sm font-medium transition-all duration-150 ${
                 filter.brand === opt.value
                   ? opt.value === "IM3"
                     ? "badge-im3"
@@ -104,9 +104,9 @@ export function GlobalFilterBar() {
 
       {/* Area */}
       <div className="flex items-center gap-2">
-        <span className="text-xs text-muted-foreground whitespace-nowrap">Area</span>
+        <span className="text-sm text-muted-foreground whitespace-nowrap">Area</span>
         <Select value={filter.area || "all"} onValueChange={(v) => setArea(v === "all" ? "" : v)}>
-          <SelectTrigger className="h-7 w-44 text-xs bg-secondary border-border">
+          <SelectTrigger className="h-7 w-44 text-sm bg-secondary border-border">
             <SelectValue placeholder="All Areas" />
           </SelectTrigger>
           <SelectContent>
@@ -120,9 +120,9 @@ export function GlobalFilterBar() {
 
       {/* Unified Location (Branch OR Kabupaten) */}
       <div className="flex items-center gap-2">
-        <span className="text-xs text-muted-foreground whitespace-nowrap">Location</span>
+        <span className="text-sm text-muted-foreground whitespace-nowrap">Location</span>
         <Select value={locationValue} onValueChange={handleLocationChange}>
-          <SelectTrigger className="h-7 w-52 text-xs bg-secondary border-border">
+          <SelectTrigger className="h-7 w-52 text-sm bg-secondary border-border">
             <SelectValue placeholder="All Locations" />
           </SelectTrigger>
           <SelectContent>
@@ -161,14 +161,14 @@ export function GlobalFilterBar() {
       {/* Active filter badges */}
       <div className="flex flex-wrap gap-1 ml-auto">
         {filter.area && (
-          <Badge variant="secondary" className="text-xs py-0.5 px-2 cursor-pointer" onClick={() => setArea("")}>
+          <Badge variant="secondary" className="text-sm py-0.5 px-2 cursor-pointer" onClick={() => setArea("")}>
             {filter.area} ×
           </Badge>
         )}
         {locationLabel && (
           <Badge
             variant="secondary"
-            className="text-xs py-0.5 px-2 cursor-pointer"
+            className="text-sm py-0.5 px-2 cursor-pointer"
             onClick={() => { setBranch(""); setKabkot(""); }}
           >
             {locationLabel} ×
@@ -178,7 +178,7 @@ export function GlobalFilterBar() {
           <Button
             variant="ghost"
             size="sm"
-            className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+            className="h-6 px-2 text-sm text-muted-foreground hover:text-foreground"
             onClick={resetFilters}
           >
             <RotateCcw size={10} className="mr-1" />

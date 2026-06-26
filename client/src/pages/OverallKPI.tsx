@@ -65,32 +65,32 @@ function KpiCard({
   return (
     <div className="kpi-card fade-in">
       <div className="flex items-start justify-between mb-3">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight max-w-[70%]">
+        <p className="text-sm font-semibold uppercase tracking-wider text-muted-foreground leading-tight max-w-[70%]">
           {label}
         </p>
-        <span className="text-xs text-muted-foreground">{unit}</span>
+        <span className="text-sm text-muted-foreground">{unit}</span>
       </div>
       <div className="mb-2">
         <span className="text-2xl font-bold text-foreground">{fmt(mtdValue)}</span>
       </div>
       <div className="flex items-center gap-2">
-        <span className={`flex items-center gap-1 text-xs font-semibold ${isPositive ? "value-positive" : "value-negative"}`}>
+        <span className={`flex items-center gap-1 text-sm font-semibold ${isPositive ? "value-positive" : "value-negative"}`}>
           {isPositive ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
           {formatPercent(growth)}
         </span>
-        <span className="text-xs text-muted-foreground">vs LMTD</span>
-        <span className={`text-xs ml-auto ${isPositive ? "value-positive" : "value-negative"}`}>
+        <span className="text-sm text-muted-foreground">vs LMTD</span>
+        <span className={`text-sm ml-auto ${isPositive ? "value-positive" : "value-negative"}`}>
           {isPositive ? "+" : ""}{fmt(gap)}
         </span>
       </div>
-      <div className="mt-2 pt-2 border-t border-border/50 flex justify-between text-xs text-muted-foreground">
+      <div className="mt-2 pt-2 border-t border-border/50 flex justify-between text-sm text-muted-foreground">
         <span>Last FM: {fmt(fmValue)}</span>
         <span>LMTD: {fmt(lmtdValue)}</span>
       </div>
       {yoyGrowth != null && (
         <div className="mt-1.5 pt-1.5 border-t border-border/30 flex items-center gap-2">
           <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">YoY</span>
-          <span className={`flex items-center gap-0.5 text-xs font-semibold ${yoyIsPos ? "value-positive" : "value-negative"}`}>
+          <span className={`flex items-center gap-0.5 text-sm font-semibold ${yoyIsPos ? "value-positive" : "value-negative"}`}>
             {yoyIsPos ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
             {formatPercent(yoyGrowth)}
           </span>
@@ -108,7 +108,7 @@ function CustomTooltip({ active, payload, label, fieldName }: any) {
   const divisor = kpi?.divisor ?? 1;
   const unit = kpi?.unit ?? "";
   return (
-    <div className="bg-popover border border-border rounded-lg p-3 shadow-xl text-xs">
+    <div className="bg-popover border border-border rounded-lg p-3 shadow-xl text-sm">
       <p className="font-semibold text-foreground mb-2">{monthLabel(label)}</p>
       {payload.map((p: any) => (
         <div key={p.dataKey} className="flex items-center gap-2 mb-1">
@@ -190,18 +190,18 @@ function MiniKpiCard({
       className={`kpi-card cursor-pointer transition-all ${isActive ? "ring-1 ring-primary" : "hover:ring-1 hover:ring-border"}`}
     >
       <div className="flex items-start justify-between mb-2">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight max-w-[70%]">{label}</p>
-        <span className="text-xs text-muted-foreground">{unit}</span>
+        <p className="text-sm font-semibold uppercase tracking-wider text-muted-foreground leading-tight max-w-[70%]">{label}</p>
+        <span className="text-sm text-muted-foreground">{unit}</span>
       </div>
       <div className="mb-1">
         <span className="text-xl font-bold text-foreground">{fmt(mtdValue)}</span>
       </div>
       <div className="flex items-center gap-2">
-        <span className={`flex items-center gap-1 text-xs font-semibold ${isPos ? "value-positive" : "value-negative"}`}>
+        <span className={`flex items-center gap-1 text-sm font-semibold ${isPos ? "value-positive" : "value-negative"}`}>
           {isPos ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
           {formatPercent(growth)}
         </span>
-        <span className="text-xs text-muted-foreground">vs LMTD</span>
+        <span className="text-sm text-muted-foreground">vs LMTD</span>
         {yoyGrowth != null && (
           <span className={`flex items-center gap-0.5 text-[10px] font-semibold ml-auto ${yoyIsPos ? "value-positive" : "value-negative"}`}>
             {yoyIsPos ? <TrendingUp size={9} /> : <TrendingDown size={9} />}
@@ -209,7 +209,7 @@ function MiniKpiCard({
           </span>
         )}
       </div>
-      <div className="mt-1.5 pt-1.5 border-t border-border/50 flex justify-between text-xs text-muted-foreground">
+      <div className="mt-1.5 pt-1.5 border-t border-border/50 flex justify-between text-sm text-muted-foreground">
         <span>Full Month: {fmt(mtdValue)}</span>
         <span>LMTD: {fmt(lmtdValue)}</span>
       </div>
@@ -270,7 +270,7 @@ function GrowthTable({
         <div className="flex items-center gap-1 bg-secondary rounded-lg p-0.5">
           <button
             onClick={() => setBasisMode("total")}
-            className={`text-xs px-3 py-1 rounded-md transition-all ${
+            className={`text-sm px-3 py-1 rounded-md transition-all ${
               basisMode === "total" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
             }`}
           >
@@ -278,7 +278,7 @@ function GrowthTable({
           </button>
           <button
             onClick={() => setBasisMode("edb")}
-            className={`text-xs px-3 py-1 rounded-md transition-all ${
+            className={`text-sm px-3 py-1 rounded-md transition-all ${
               basisMode === "edb" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
             }`}
           >
@@ -287,11 +287,11 @@ function GrowthTable({
         </div>
       </div>
       {basisMode === "edb" && (
-        <p className="text-xs text-muted-foreground mb-3 px-1">
+        <p className="text-sm text-muted-foreground mb-3 px-1">
           EDB (Equal Day Basis): Prepaid Revenue divided by days elapsed (÷{MTD_DAY}) — normalises for unequal month lengths to give a true daily revenue rate.
         </p>
       )}
-      <table className="w-full text-xs data-table">
+      <table className="w-full text-sm data-table">
         <thead>
           <tr>
             <th className="text-left py-2 px-3 rounded-l-md">KPI</th>
@@ -480,8 +480,8 @@ export default function OverallKPI() {
           <KpiSelector />
           <Tabs value={chartType} onValueChange={(v) => setChartType(v as "line" | "bar")}>
             <TabsList className="h-7 bg-secondary">
-              <TabsTrigger value="line" className="text-xs h-6 px-3">Line</TabsTrigger>
-              <TabsTrigger value="bar" className="text-xs h-6 px-3">Bar</TabsTrigger>
+              <TabsTrigger value="line" className="text-sm h-6 px-3">Line</TabsTrigger>
+              <TabsTrigger value="bar" className="text-sm h-6 px-3">Bar</TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
@@ -570,7 +570,7 @@ export default function OverallKPI() {
                 <h3 className="text-sm font-semibold text-foreground">
                   {KPI_FIELDS[activeKpi]?.label ?? activeKpi} — Monthly Trend
                   {filter.brand === "Combined" && (
-                    <span className="ml-2 text-xs text-muted-foreground">IM3 + 3ID</span>
+                    <span className="ml-2 text-sm text-muted-foreground">IM3 + 3ID</span>
                   )}
                 </h3>
               </div>
@@ -579,7 +579,7 @@ export default function OverallKPI() {
                   <button
                     key={f}
                     onClick={() => setActiveKpi(f)}
-                    className={`text-xs px-2 py-1 rounded-md transition-all ${
+                    className={`text-sm px-2 py-1 rounded-md transition-all ${
                       activeKpi === f
                         ? "bg-primary/20 text-primary border border-primary/30"
                         : "text-muted-foreground hover:text-foreground hover:bg-accent"

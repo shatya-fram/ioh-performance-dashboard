@@ -38,7 +38,7 @@ const SEGMENTS = ["01. NVC", "02. LVC", "03. MVC", "04. HVC"];
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-popover border border-border rounded-lg p-3 shadow-xl text-xs">
+    <div className="bg-popover border border-border rounded-lg p-3 shadow-xl text-sm">
       <p className="font-semibold text-foreground mb-2">{monthLabel(String(label))}</p>
       {payload.map((p: any) => (
         <div key={p.dataKey} className="flex items-center gap-2 mb-1">
@@ -233,9 +233,9 @@ export default function VLRAnalysis() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Tenure:</span>
+          <span className="text-sm text-muted-foreground">Tenure:</span>
           <Select value={tenureBrand} onValueChange={setTenureBrand}>
-            <SelectTrigger className="h-7 w-24 text-xs bg-secondary border-border">
+            <SelectTrigger className="h-7 w-24 text-sm bg-secondary border-border">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -251,10 +251,10 @@ export default function VLRAnalysis() {
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
         <TabsList className="bg-secondary">
-          <TabsTrigger value="tenure" className="text-xs">VLR Tenure Analysis</TabsTrigger>
-          <TabsTrigger value="segments" className="text-xs">Subscriber Segments</TabsTrigger>
-          <TabsTrigger value="ranking" className="text-xs">Kecamatan Ranking</TabsTrigger>
-          <TabsTrigger value="map" className="text-xs flex items-center gap-1"><MapIcon size={12} />Hotspot Map</TabsTrigger>
+          <TabsTrigger value="tenure" className="text-sm">VLR Tenure Analysis</TabsTrigger>
+          <TabsTrigger value="segments" className="text-sm">Subscriber Segments</TabsTrigger>
+          <TabsTrigger value="ranking" className="text-sm">Kecamatan Ranking</TabsTrigger>
+          <TabsTrigger value="map" className="text-sm flex items-center gap-1"><MapIcon size={12} />Hotspot Map</TabsTrigger>
         </TabsList>
       </Tabs>
 
@@ -304,11 +304,11 @@ export default function VLRAnalysis() {
               <h3 className="text-sm font-semibold text-foreground">
                 VLR Daily Average by Tenure Group — {tenureBrand}
               </h3>
-              <p className="text-xs text-muted-foreground mt-0.5">
+              <p className="text-sm text-muted-foreground mt-0.5">
                 MTD vs LMTD · values in subscribers · Mix % = share of total VLR
               </p>
             </div>
-            <table className="w-full text-xs data-table min-w-[780px]">
+            <table className="w-full text-sm data-table min-w-[780px]">
               <thead>
                 <tr>
                   <th className="text-left py-2.5 px-4 rounded-l-md w-[160px]">Tenure Group</th>
@@ -342,7 +342,7 @@ export default function VLRAnalysis() {
                     <td className="py-2.5 px-3 text-right text-muted-foreground">
                       {r.mixLmtd.toFixed(1)}%
                     </td>
-                    <td className={`py-2.5 px-3 text-right font-semibold text-xs ${
+                    <td className={`py-2.5 px-3 text-right font-semibold text-sm ${
                       r.mixShift > 0.1 ? "value-positive" : r.mixShift < -0.1 ? "value-negative" : "text-muted-foreground"
                     }`}>
                       {r.mixShift >= 0 ? "+" : ""}{r.mixShift.toFixed(1)} pp
@@ -431,7 +431,7 @@ export default function VLRAnalysis() {
             {segGapByKabkot.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">No data available</p>
             ) : (
-              <table className="w-full text-xs data-table">
+              <table className="w-full text-sm data-table">
                 <thead>
                   <tr>
                     <th className="text-left py-2 px-3 rounded-l-md">Kabupaten</th>
@@ -447,7 +447,7 @@ export default function VLRAnalysis() {
                     <tr key={i} className="border-t border-border/30 hover:bg-accent/20 transition-colors">
                       <td className="py-2 px-3 font-medium text-foreground">{r.kabkot}</td>
                       <td className="py-2 px-3">
-                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${r.brand === "IM3" ? "badge-im3" : "badge-3id"}`}>
+                        <span className={`px-2 py-0.5 rounded text-sm font-medium ${r.brand === "IM3" ? "badge-im3" : "badge-3id"}`}>
                           {r.brand}
                         </span>
                       </td>
@@ -472,12 +472,12 @@ export default function VLRAnalysis() {
       {!isLoading && activeTab === "map" && (
         <div className="space-y-4">
           <div className="flex items-center gap-3 flex-wrap">
-            <span className="text-xs text-muted-foreground font-medium">Map Metric:</span>
+            <span className="text-sm text-muted-foreground font-medium">Map Metric:</span>
             {(["vlr", "growth", "gap"] as const).map((m) => (
               <button
                 key={m}
                 onClick={() => setMapMetric(m)}
-                className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                className={`px-3 py-1 rounded-full text-sm font-semibold transition-all ${
                   mapMetric === m
                     ? "bg-amber-500 text-black"
                     : "bg-secondary text-muted-foreground hover:text-foreground"
@@ -486,12 +486,12 @@ export default function VLRAnalysis() {
                 {m === "vlr" ? "VLR Rate" : m === "growth" ? "MoM Growth" : "MTD vs LMTD Gap"}
               </button>
             ))}
-            <span className="text-xs text-muted-foreground ml-2">Brand:</span>
+            <span className="text-sm text-muted-foreground ml-2">Brand:</span>
             {(["IM3", "3ID", "IOH"] as const).map((b) => (
               <button
                 key={b}
                 onClick={() => setMapBrand(b)}
-                className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                className={`px-3 py-1 rounded-full text-sm font-semibold transition-all ${
                   mapBrand === b
                     ? b === "IM3" ? "bg-yellow-500 text-black" : b === "3ID" ? "bg-fuchsia-500 text-white" : "bg-blue-500 text-white"
                     : "bg-secondary text-muted-foreground hover:text-foreground"
@@ -523,7 +523,7 @@ export default function VLRAnalysis() {
               }).slice(0, 5);
               return (
                 <div key={label} className="chart-container col-span-1 lg:col-span-2">
-                  <h4 className={`text-xs font-semibold mb-3 flex items-center gap-1 ${
+                  <h4 className={`text-sm font-semibold mb-3 flex items-center gap-1 ${
                     label.includes("Top") ? "value-positive" : "value-negative"
                   }`}>
                     {label.includes("Top") ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
@@ -533,7 +533,7 @@ export default function VLRAnalysis() {
                     {sorted.map((r, i) => {
                       const gap = getBV(r as any);
                       return (
-                        <div key={i} className="flex items-center justify-between text-xs">
+                        <div key={i} className="flex items-center justify-between text-sm">
                           <span className="text-foreground font-medium truncate max-w-[140px]">{r.kecamatan}</span>
                           <span className={`font-bold tabular-nums ${
                             gap >= 0 ? "value-positive" : "value-negative"
@@ -555,9 +555,9 @@ export default function VLRAnalysis() {
       {!isLoading && activeTab === "ranking" && (
         <div className="space-y-6">
           <div className="flex items-center gap-3">
-            <span className="text-xs text-muted-foreground">Show top/bottom</span>
+            <span className="text-sm text-muted-foreground">Show top/bottom</span>
             <Select value={String(topN)} onValueChange={(v) => setTopN(Number(v))}>
-              <SelectTrigger className="h-7 w-20 text-xs bg-secondary border-border">
+              <SelectTrigger className="h-7 w-20 text-sm bg-secondary border-border">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -673,7 +673,7 @@ export default function VLRAnalysis() {
         const hasArea   = !!filter.area;
         if (!hasKabkot && !hasArea) return (
           <div className="chart-container">
-            <div className="flex items-center gap-2 text-muted-foreground text-xs">
+            <div className="flex items-center gap-2 text-muted-foreground text-sm">
               <Users size={14} />
               <span>Select a <strong className="text-foreground">Kabupaten</strong> or <strong className="text-foreground">Sales Area</strong> in the filter above to see the Kecamatan ranked drill-down.</span>
             </div>
@@ -731,11 +731,11 @@ export default function VLRAnalysis() {
                 <Users size={14} className="text-amber-400" />
                 Kecamatan VLR Drill-Down — {scopeLabel} · {mapBrand}
               </h3>
-              <p className="text-xs text-muted-foreground mt-0.5">
+              <p className="text-sm text-muted-foreground mt-0.5">
                 Ranked by VLR GAP (MTD − LMTD) · Click column headers to re-sort · {sorted.length} kecamatan
               </p>
             </div>
-            <table className="w-full text-xs data-table min-w-[860px]">
+            <table className="w-full text-sm data-table min-w-[860px]">
               <thead>
                 <tr>
                   <th className="text-left py-2.5 px-4 rounded-l-md w-8">#</th>

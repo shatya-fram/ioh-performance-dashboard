@@ -26,10 +26,10 @@ import { MapPin, TrendingUp, TrendingDown } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 function GrowthBadge({ value }: { value: number | null }) {
-  if (value === null) return <span className="text-muted-foreground text-xs">—</span>;
+  if (value === null) return <span className="text-muted-foreground text-sm">—</span>;
   const pct = value * 100;
   return (
-    <span className={`flex items-center gap-0.5 text-xs font-semibold ${pct >= 0 ? "value-positive" : "value-negative"}`}>
+    <span className={`flex items-center gap-0.5 text-sm font-semibold ${pct >= 0 ? "value-positive" : "value-negative"}`}>
       {pct >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
       {pct >= 0 ? "+" : ""}{pct.toFixed(1)}%
     </span>
@@ -179,7 +179,7 @@ export default function SalesAreaFigures() {
                   <button
                     key={f}
                     onClick={() => setActiveKpi(f)}
-                    className={`text-xs px-2 py-1 rounded-md transition-all ${
+                    className={`text-sm px-2 py-1 rounded-md transition-all ${
                       activeKpi === f
                         ? "bg-primary/20 text-primary border border-primary/30"
                         : "text-muted-foreground hover:text-foreground hover:bg-accent"
@@ -255,7 +255,7 @@ export default function SalesAreaFigures() {
                 KPI Performance Table — {areaLabel} · {brandLabel}
               </h3>
             </div>
-            <table className="w-full text-xs data-table min-w-[900px]">
+            <table className="w-full text-sm data-table min-w-[900px]">
               <thead>
                 <tr>
                   <th className="text-left py-2 px-3 rounded-l-md sticky left-0 bg-card z-10">KPI</th>
@@ -295,7 +295,7 @@ export default function SalesAreaFigures() {
                     >
                       <td className={`py-2 px-3 font-medium sticky left-0 bg-card z-10 ${activeKpi === field ? "text-primary" : "text-foreground"}`}>
                         {kpi.label}
-                        <span className="text-muted-foreground ml-1 text-xs">({kpi.unit})</span>
+                        <span className="text-muted-foreground ml-1 text-sm">({kpi.unit})</span>
                       </td>
                       {months.slice(-12).map((ym) => {
                         const fmRow = fmByMonthBrand.find((r) => String(r.yearMonth) === ym) ?? {};
@@ -327,14 +327,14 @@ export default function SalesAreaFigures() {
               <div className="section-header mb-4">
                 <h3 className="text-sm font-semibold text-foreground">Brand Comparison — MTD vs LMTD</h3>
               </div>
-              <table className="w-full text-xs data-table">
+              <table className="w-full text-sm data-table">
                 <thead>
                   <tr>
                     <th className="text-left py-2 px-3 rounded-l-md">KPI</th>
                     {brands.map((b) => (
                       <React.Fragment key={b}>
                         <th className="text-right py-2 px-2">
-                          <span className={`px-1.5 py-0.5 rounded text-xs ${b === "IM3" ? "badge-im3" : "badge-3id"}`}>{b}</span> MTD
+                          <span className={`px-1.5 py-0.5 rounded text-sm ${b === "IM3" ? "badge-im3" : "badge-3id"}`}>{b}</span> MTD
                         </th>
                         <th className="text-right py-2 px-2 text-muted-foreground">{b} LMTD</th>
                         <th className="text-right py-2 px-2">{b} GAP%</th>

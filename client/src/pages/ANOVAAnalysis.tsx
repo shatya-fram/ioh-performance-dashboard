@@ -79,7 +79,7 @@ function SummaryBox({
       style={{ borderLeft: `3px solid ${accentColor ?? "oklch(0.78 0.16 75)"}` }}
     >
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+        <p className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
         {sublabel && <p className="text-[10px] text-muted-foreground/70">{sublabel}</p>}
       </div>
       <div className="flex items-end justify-between gap-2">
@@ -97,7 +97,7 @@ function SummaryBox({
           <GrowthIcon v={gap} />
           {fmtGap(gap)} IDR
         </span>
-        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${growth >= 0 ? "bg-green-500/15 text-green-400" : "bg-red-500/15 text-red-400"}`}>
+        <span className={`text-sm font-medium px-2 py-0.5 rounded-full ${growth >= 0 ? "bg-green-500/15 text-green-400" : "bg-red-500/15 text-red-400"}`}>
           {fmtGrowth(growth)}
         </span>
       </div>
@@ -121,9 +121,9 @@ function PerformanceTable({
     <div className="chart-container overflow-x-auto">
       <div className="section-header mb-4">
         <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-        <p className="text-xs text-muted-foreground mt-0.5">Mix % = component share of Total Revenue</p>
+        <p className="text-sm text-muted-foreground mt-0.5">Mix % = component share of Total Revenue</p>
       </div>
-      <table className="w-full text-xs data-table min-w-[860px]">
+      <table className="w-full text-sm data-table min-w-[860px]">
         <thead>
           <tr>
             <th className="text-left py-2.5 px-4 rounded-l-md w-[220px]">Revenue Component</th>
@@ -265,11 +265,11 @@ function BrandPerformanceTable({
         <h3 className="text-sm font-semibold text-foreground">
           Revenue Performance by Brand
           {normalizeVoucher && (
-            <span className="ml-2 text-xs font-normal text-amber-400">(Voucher Game Normalized)</span>
+            <span className="ml-2 text-sm font-normal text-amber-400">(Voucher Game Normalized)</span>
           )}
         </h3>
       </div>
-      <table className="w-full text-xs data-table min-w-[900px]">
+      <table className="w-full text-sm data-table min-w-[900px]">
         <thead>
           <tr>
             <th className="text-left py-2.5 px-4 rounded-l-md w-[200px]">Revenue Component</th>
@@ -429,7 +429,7 @@ function KabupatenDrillDown({
             Kabupaten Drill-Down —
             <span style={{ color: meta.accentColor }} className="ml-1">{meta.label}</span>
           </h3>
-          <p className="text-xs text-muted-foreground mt-0.5">
+          <p className="text-sm text-muted-foreground mt-0.5">
             MTD vs LMTD gap per Kabupaten · ANOVA Impact = Kabupaten gap as % of total IOH gap
           </p>
         </div>
@@ -440,7 +440,7 @@ function KabupatenDrillDown({
           <X className="w-4 h-4" />
         </button>
       </div>
-      <table className="w-full text-xs data-table min-w-[900px]">
+      <table className="w-full text-sm data-table min-w-[900px]">
         <thead>
           <tr>
             <th className="text-left py-2.5 px-4 rounded-l-md w-[180px]">Kabupaten / Kota</th>
@@ -747,7 +747,7 @@ export default function ANOVAAnalysis() {
             <p className="text-sm text-muted-foreground mt-0.5">
               MTD vs LMTD variance by revenue stream and channel
               {latestMtd && (
-                <span className="ml-2 text-xs text-amber-400/80">
+                <span className="ml-2 text-sm text-amber-400/80">
                   · MTD: {periodLabel(latestMtd)} · LMTD: {periodLabel(prevMtd)} · Last FM: {periodLabel(latestFm)}
                 </span>
               )}
@@ -760,7 +760,7 @@ export default function ANOVAAnalysis() {
             checked={filter.normalizeVoucher}
             onCheckedChange={(v) => setNormalizeVoucher(v)}
           />
-          <Label htmlFor="normalize" className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
+          <Label htmlFor="normalize" className="text-sm text-muted-foreground cursor-pointer whitespace-nowrap">
             Normalize (excl. Voucher Game)
           </Label>
         </div>
@@ -816,7 +816,7 @@ export default function ANOVAAnalysis() {
       {/* ── Voucher Game info banner ─────────────────────────────────────────── */}
       {!isLoading && voucherTotal !== 0 && (
         <div
-          className={`flex items-center justify-between px-4 py-2.5 rounded-lg border text-xs transition-all ${
+          className={`flex items-center justify-between px-4 py-2.5 rounded-lg border text-sm transition-all ${
             normalizeVoucher
               ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
               : "border-border/30 bg-accent/5 text-muted-foreground"
