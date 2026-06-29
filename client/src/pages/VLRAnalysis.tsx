@@ -121,12 +121,15 @@ export default function VLRAnalysis() {
   }, [vlrQuery.data]);
 
   // ─── Subscriber Segments trend ────────────────────────────────────────────
+  // Only accept YYYYMM numeric month codes — exclude literal strings like "LMTD"
+  const isValidYM = (ym: string) => /^\d{6}$/.test(ym);
+
   const segTrendData = useMemo(() => {
     if (!segmentsQuery.data) return [];
     const map = new Map<string, Record<string, any>>();
     for (const row of segmentsQuery.data) {
       const ym = String(row.monthMtd ?? "");
-      if (!ym) continue;
+      if (!ym || !isValidYM(ym)) continue; // skip non-numeric months (e.g. "LMTD")
       if (!map.has(ym)) map.set(ym, { yearMonth: ym });
       const e = map.get(ym)!;
       const seg = String(row.valueSegment ?? "");
@@ -140,7 +143,10 @@ export default function VLRAnalysis() {
   // ─── Segment gap by kabkot ────────────────────────────────────────────────
   const segGapByKabkot = useMemo(() => {
     if (!segmentsQuery.data) return [];
-    const months = Array.from(new Set(segmentsQuery.data.map((r) => String(r.monthMtd ?? "")))).sort();
+    // Filter out non-numeric month codes before finding latest/prev
+    const months = Array.from(new Set(
+      segmentsQuery.data.map((r) => String(r.monthMtd ?? "")).filter(isValidYM)
+    )).sort();
     const latestMonth = months[months.length - 1];
     const prevMonth = months[months.length - 2];
     if (!latestMonth || !prevMonth) return [];
