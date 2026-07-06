@@ -344,8 +344,132 @@ function BrandPerformanceTable({
   );
 }
 
-// ─── Kabupaten Drill-Down Table ──────────────────────────────────────────────
+// ─── Revenue Breakdown Panel ─────────────────────────────────────────────────
 type KpiKey = "revPrepaid" | "revBase" | "revAcqM0" | "revOrganic" | "revTrade" | "revNonTrade";
+
+// Defines which sub-components to show when a KPI card is clicked
+const BREAKDOWN_MAP: Record<KpiKey, KpiKey[]> = {
+  revPrepaid:  ["revBase", "revAcqM0", "revOrganic", "revTrade", "revNonTrade"],
+  revBase:     ["revOrganic", "revTrade", "revNonTrade"],
+  revAcqM0:    ["revOrganic", "revTrade", "revNonTrade"],
+  revOrganic:  ["revAcqM0", "revBase"],
+  revTrade:    ["revAcqM0", "revBase"],
+  revNonTrade: ["revAcqM0", "revBase"],
+};
+
+function RevenueBreakdownPanel({
+  kpiKey,
+  im3,
+  sid,
+  ioh,
+  onClose,
+}: {
+  kpiKey: KpiKey;
+  im3: Record<string, BrandMetrics>;
+  sid: Record<string, BrandMetrics>;
+  ioh: Record<string, BrandMetrics>;
+  onClose: () => void;
+}) {
+  const meta = KPI_META[kpiKey];
+  const subKeys = BREAKDOWN_MAP[kpiKey];
+
+  function getBrand(brandMap: Record<string, BrandMetrics>, field: string) {
+    const m = brandMap[field] ?? { mtd: 0, lmtd: 0, lastFm: 0 };
+    const gap = m.mtd - m.lmtd;
+    const growth = m.lmtd !== 0 ? (gap / Math.abs(m.lmtd)) * 100 : 0;
+    return { mtd: m.mtd, lmtd: m.lmtd, gap, growth };
+  }
+
+  const brands: Array<{ key: string; label: string; color: string; map: Record<string, BrandMetrics> }> = [
+    { key: "im3",  label: "IM3",  color: BRAND_COLORS["IM3"],  map: im3 },
+    { key: "3id",  label: "3ID",  color: BRAND_COLORS["3ID"],  map: sid },
+    { key: "ioh",  label: "IOH",  color: BRAND_COLORS["IOH"],  map: ioh },
+  ];
+
+  return (
+    <div
+      className="chart-container overflow-x-auto mt-0"
+      style={{ borderTop: `3px solid ${meta.accentColor}` }}
+    >
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">
+            Revenue Breakdown —
+            <span style={{ color: meta.accentColor }} className="ml-1">{meta.label}</span>
+          </h3>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Sub-component contribution by brand (IM3 · 3ID · IOH)
+          </p>
+        </div>
+        <button
+          onClick={onClose}
+          className="p-1.5 rounded-md hover:bg-accent/20 text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm data-table min-w-[900px]">
+          <thead>
+            <tr>
+              <th className="text-left py-2.5 px-4 rounded-l-md w-[180px]">Component</th>
+              {brands.map((b) => (
+                <th key={b.key} colSpan={4} className="text-center py-2.5 px-2" style={{ color: b.color }}>
+                  {b.label}
+                </th>
+              ))}
+            </tr>
+            <tr className="text-xs text-muted-foreground">
+              <th className="py-1.5 px-4"></th>
+              {brands.map((b) => (
+                <>
+                  <th key={b.key + "_mtd"} className="text-right py-1.5 px-2">MTD</th>
+                  <th key={b.key + "_lmtd"} className="text-right py-1.5 px-2">LMTD</th>
+                  <th key={b.key + "_gap"} className="text-right py-1.5 px-2">Gap</th>
+                  <th key={b.key + "_gr"} className="text-right py-1.5 px-2">Growth</th>
+                </>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {subKeys.map((field) => {
+              const subMeta = KPI_META[field];
+              return (
+                <tr key={field} className="border-t border-border/30 hover:bg-accent/20 transition-colors">
+                  <td className="py-2.5 px-4 font-medium text-foreground">
+                    <span
+                      className="inline-block w-2 h-2 rounded-full mr-2"
+                      style={{ background: subMeta.accentColor }}
+                    />
+                    {subMeta.label}
+                  </td>
+                  {brands.map((b) => {
+                    const v = getBrand(b.map, field);
+                    return (
+                      <>
+                        <td key={b.key + "_mtd"} className="py-2.5 px-2 text-right text-foreground">{fmtRev(v.mtd)}</td>
+                        <td key={b.key + "_lmtd"} className="py-2.5 px-2 text-right text-muted-foreground">{fmtRev(v.lmtd)}</td>
+                        <td key={b.key + "_gap"} className={`py-2.5 px-2 text-right font-semibold ${v.gap >= 0 ? "value-positive" : "value-negative"}`}>
+                          {fmtGap(v.gap)}
+                        </td>
+                        <td key={b.key + "_gr"} className={`py-2.5 px-2 text-right ${v.growth >= 0 ? "value-positive" : "value-negative"}`}>
+                          {fmtGrowth(v.growth)}
+                        </td>
+                      </>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── Kabupaten Drill-Down Table ──────────────────────────────────────────────
 
 const KPI_META: Record<KpiKey, { label: string; accentColor: string }> = {
   revPrepaid:  { label: "Total Revenue",         accentColor: BRAND_COLORS["IOH"] },
@@ -815,6 +939,17 @@ export default function ANOVAAnalysis() {
             </div>
           ))}
         </div>
+      )}
+
+      {/* u2500u2500 Revenue Breakdown Panel (inline drill-down) u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500u2500 */}
+      {!isLoading && selectedKpi && (
+        <RevenueBreakdownPanel
+          kpiKey={selectedKpi}
+          im3={im3Map}
+          sid={sid3Map}
+          ioh={iohMap}
+          onClose={() => setSelectedKpi(null)}
+        />
       )}
 
       {/* ── Voucher Game info banner ─────────────────────────────────────────── */}
