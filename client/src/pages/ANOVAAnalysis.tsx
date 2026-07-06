@@ -357,14 +357,17 @@ const KPI_META: Record<KpiKey, { label: string; accentColor: string }> = {
   revNonTrade: { label: "Non-Trade Channel",      accentColor: "oklch(0.68 0.20 340)" },
 };
 
-// Defines which sub-components to show when a KPI card is clicked
-const BREAKDOWN_MAP: Record<KpiKey, KpiKey[]> = {
+// Sub-components to show as additional columns when a KPI card is clicked
+// For channel cards (Organic/Trade/NonTrade): show Acq + Base split within that channel brand
+// For Acq/Base cards: show channel split (Organic/Trade/NonTrade)
+// For Total: show all
+const BREAKDOWN_COLS: Record<KpiKey, KpiKey[]> = {
   revPrepaid:  ["revBase", "revAcqM0", "revOrganic", "revTrade", "revNonTrade"],
   revBase:     ["revOrganic", "revTrade", "revNonTrade"],
   revAcqM0:    ["revOrganic", "revTrade", "revNonTrade"],
-  revOrganic:  ["revAcqM0", "revBase"],
-  revTrade:    ["revAcqM0", "revBase"],
-  revNonTrade: ["revAcqM0", "revBase"],
+  revOrganic:  ["revBase", "revAcqM0"],
+  revTrade:    ["revBase", "revAcqM0"],
+  revNonTrade: ["revBase", "revAcqM0"],
 };
 
 function RevenueBreakdownPanel({
@@ -381,20 +384,24 @@ function RevenueBreakdownPanel({
   onClose: () => void;
 }) {
   const meta = KPI_META[kpiKey];
-  const subKeys = BREAKDOWN_MAP[kpiKey];
+  const subCols = BREAKDOWN_COLS[kpiKey];
 
-  function getBrand(brandMap: Record<string, BrandMetrics>, field: string) {
+  // Rows = brands (IM3, 3ID, IOH)
+  // Columns = selected KPI + sub-components
+  const brandRows: Array<{ label: string; color: string; map: Record<string, BrandMetrics> }> = [
+    { label: "IM3", color: BRAND_COLORS["IM3"], map: im3 },
+    { label: "3ID", color: BRAND_COLORS["3ID"], map: sid },
+    { label: "IOH (Combined)", color: BRAND_COLORS["IOH"], map: ioh },
+  ];
+
+  const allCols: KpiKey[] = [kpiKey, ...subCols];
+
+  function getVal(brandMap: Record<string, BrandMetrics>, field: string) {
     const m = brandMap[field] ?? { mtd: 0, lmtd: 0, lastFm: 0 };
     const gap = m.mtd - m.lmtd;
     const growth = m.lmtd !== 0 ? (gap / Math.abs(m.lmtd)) * 100 : 0;
     return { mtd: m.mtd, lmtd: m.lmtd, gap, growth };
   }
-
-  const brands: Array<{ key: string; label: string; color: string; map: Record<string, BrandMetrics> }> = [
-    { key: "im3",  label: "IM3",  color: BRAND_COLORS["IM3"],  map: im3 },
-    { key: "3id",  label: "3ID",  color: BRAND_COLORS["3ID"],  map: sid },
-    { key: "ioh",  label: "IOH",  color: BRAND_COLORS["IOH"],  map: ioh },
-  ];
 
   return (
     <div
@@ -407,8 +414,8 @@ function RevenueBreakdownPanel({
             Revenue Breakdown —
             <span style={{ color: meta.accentColor }} className="ml-1">{meta.label}</span>
           </h3>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Sub-component contribution by brand (IM3 · 3ID · IOH)
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Brand contribution · MTD vs LMTD (same-day comparison)
           </p>
         </div>
         <button
@@ -420,58 +427,55 @@ function RevenueBreakdownPanel({
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-sm data-table min-w-[900px]">
+        <table className="w-full text-sm data-table" style={{ minWidth: `${180 + allCols.length * 320}px` }}>
           <thead>
             <tr>
-              <th className="text-left py-2.5 px-4 rounded-l-md w-[180px]">Component</th>
-              {brands.map((b) => (
-                <th key={b.key} colSpan={4} className="text-center py-2.5 px-2" style={{ color: b.color }}>
-                  {b.label}
-                </th>
-              ))}
+              <th className="text-left py-2.5 px-4 w-[160px]">Brand</th>
+              {allCols.map((col) => {
+                const cm = KPI_META[col];
+                return (
+                  <th key={col} colSpan={4} className="text-center py-2.5 px-2 border-l border-border/20"
+                    style={{ color: col === kpiKey ? meta.accentColor : cm.accentColor }}>
+                    {cm.label}
+                  </th>
+                );
+              })}
             </tr>
             <tr className="text-xs text-muted-foreground">
               <th className="py-1.5 px-4"></th>
-              {brands.map((b) => (
+              {allCols.map((col) => (
                 <>
-                  <th key={b.key + "_mtd"} className="text-right py-1.5 px-2">MTD</th>
-                  <th key={b.key + "_lmtd"} className="text-right py-1.5 px-2">LMTD</th>
-                  <th key={b.key + "_gap"} className="text-right py-1.5 px-2">Gap</th>
-                  <th key={b.key + "_gr"} className="text-right py-1.5 px-2">Growth</th>
+                  <th key={col + "_mtd"} className="text-right py-1.5 px-2 border-l border-border/20">MTD</th>
+                  <th key={col + "_lmtd"} className="text-right py-1.5 px-2">LMTD</th>
+                  <th key={col + "_gap"} className="text-right py-1.5 px-2">Gap</th>
+                  <th key={col + "_gr"} className="text-right py-1.5 px-2">Gr%</th>
                 </>
               ))}
             </tr>
           </thead>
           <tbody>
-            {subKeys.map((field) => {
-              const subMeta = KPI_META[field];
-              return (
-                <tr key={field} className="border-t border-border/30 hover:bg-accent/20 transition-colors">
-                  <td className="py-2.5 px-4 font-medium text-foreground">
-                    <span
-                      className="inline-block w-2 h-2 rounded-full mr-2"
-                      style={{ background: subMeta.accentColor }}
-                    />
-                    {subMeta.label}
-                  </td>
-                  {brands.map((b) => {
-                    const v = getBrand(b.map, field);
-                    return (
-                      <>
-                        <td key={b.key + "_mtd"} className="py-2.5 px-2 text-right text-foreground">{fmtRev(v.mtd)}</td>
-                        <td key={b.key + "_lmtd"} className="py-2.5 px-2 text-right text-muted-foreground">{fmtRev(v.lmtd)}</td>
-                        <td key={b.key + "_gap"} className={`py-2.5 px-2 text-right font-semibold ${v.gap >= 0 ? "value-positive" : "value-negative"}`}>
-                          {fmtGap(v.gap)}
-                        </td>
-                        <td key={b.key + "_gr"} className={`py-2.5 px-2 text-right ${v.growth >= 0 ? "value-positive" : "value-negative"}`}>
-                          {fmtGrowth(v.growth)}
-                        </td>
-                      </>
-                    );
-                  })}
-                </tr>
-              );
-            })}
+            {brandRows.map((br) => (
+              <tr key={br.label} className="border-t border-border/30 hover:bg-accent/20 transition-colors">
+                <td className="py-2.5 px-4 font-semibold" style={{ color: br.color }}>
+                  {br.label}
+                </td>
+                {allCols.map((col) => {
+                  const v = getVal(br.map, col);
+                  return (
+                    <>
+                      <td key={col + "_mtd"} className="py-2.5 px-2 text-right text-foreground border-l border-border/20">{fmtRev(v.mtd)}</td>
+                      <td key={col + "_lmtd"} className="py-2.5 px-2 text-right text-muted-foreground">{fmtRev(v.lmtd)}</td>
+                      <td key={col + "_gap"} className={`py-2.5 px-2 text-right font-semibold ${v.gap >= 0 ? "value-positive" : "value-negative"}`}>
+                        {fmtGap(v.gap)}
+                      </td>
+                      <td key={col + "_gr"} className={`py-2.5 px-2 text-right ${v.growth >= 0 ? "value-positive" : "value-negative"}`}>
+                        {fmtGrowth(v.growth)}
+                      </td>
+                    </>
+                  );
+                })}
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
