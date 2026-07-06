@@ -13,6 +13,10 @@ import {
   getLMTDMonth,
   getYoYMonths,
   BRAND_COLORS,
+  daysElapsedFromMtdDate,
+  daysInYearMonth,
+  projectFullMonth,
+  formatAsOfDate,
 } from "@/lib/kpiUtils";
 import {
   LineChart,
@@ -40,6 +44,9 @@ function KpiCard({
   yoyValue,
   unit,
   divisor,
+  projectedValue,
+  daysElapsed,
+  totalDays,
 }: {
   label: string;
   mtdValue: number;
@@ -48,12 +55,18 @@ function KpiCard({
   yoyValue?: number;
   unit: string;
   divisor: number;
+  projectedValue?: number;
+  daysElapsed?: number;
+  totalDays?: number;
 }) {
-  const gap = calcGap(mtdValue, lmtdValue);
-  const growth = calcGrowth(mtdValue, lmtdValue);
+  // Compare projected full-month vs LMTD for a fair apples-to-apples view
+  const compareValue = projectedValue != null ? projectedValue : mtdValue;
+  const gap = calcGap(compareValue, lmtdValue);
+  const growth = calcGrowth(compareValue, lmtdValue);
   const isPositive = gap >= 0;
-  const yoyGrowth = yoyValue != null && yoyValue !== 0 ? calcGrowth(mtdValue, yoyValue) : null;
+  const yoyGrowth = yoyValue != null && yoyValue !== 0 ? calcGrowth(compareValue, yoyValue) : null;
   const yoyIsPos = yoyGrowth != null && yoyGrowth >= 0;
+  const isPartialMonth = daysElapsed != null && totalDays != null && daysElapsed < totalDays;
 
   const fmt = (v: number) => {
     const scaled = v / divisor;
@@ -70,15 +83,22 @@ function KpiCard({
         </p>
         <span className="text-sm text-muted-foreground">{unit}</span>
       </div>
-      <div className="mb-2">
+      <div className="mb-2 flex items-baseline gap-2">
         <span className="text-3xl font-bold text-foreground">{fmt(mtdValue)}</span>
+        {isPartialMonth && projectedValue != null && (
+          <span className="text-sm text-amber-400 font-medium" title={`Projected full month based on ${daysElapsed}/${totalDays} days`}>
+            → {fmt(projectedValue)} proj.
+          </span>
+        )}
       </div>
       <div className="flex items-center gap-2">
         <span className={`flex items-center gap-1 text-sm font-semibold ${isPositive ? "value-positive" : "value-negative"}`}>
           {isPositive ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
           {formatPercent(growth)}
         </span>
-        <span className="text-sm text-muted-foreground">vs LMTD</span>
+        <span className="text-sm text-muted-foreground">
+          {isPartialMonth ? "proj vs LMTD" : "vs LMTD"}
+        </span>
         <span className={`text-sm ml-auto ${isPositive ? "value-positive" : "value-negative"}`}>
           {isPositive ? "+" : ""}{fmt(gap)}
         </span>
@@ -210,7 +230,7 @@ function MiniKpiCard({
         )}
       </div>
       <div className="mt-1.5 pt-1.5 border-t border-border/50 flex justify-between text-sm text-muted-foreground">
-        <span>Full Month: {fmt(mtdValue)}</span>
+        <span>MTD: {fmt(mtdValue)}</span>
         <span>LMTD: {fmt(lmtdValue)}</span>
       </div>
     </div>
@@ -238,15 +258,15 @@ function GrowthTable({
   const getMonthSum = (data: Record<string, any>[], ym: string, field: string) =>
     data.filter((r) => String(r.yearMonth) === ym).reduce((s, r) => s + (Number(r[field]) || 0), 0);
 
-  // EDB = Equal Day Basis: daily revenue = total / count of days in that MTD period
-  // We approximate day count from the month number (MTD day = day of the month for the latest date)
-  // Since we don't have exact day count, we use the ratio of days in current MTD vs LMTD period
-  // Convention: MTD data is as of day 15, so both MTD and LMTD are divided by 15 days → ratio cancels out
-  // For EDB we show revenue per day (divide by 15 for MTD day 15)
-  const MTD_DAY = 15; // data is as of 15th
+  // EDB = Equal Day Basis: revenue per day, using the actual snapshot date from the DB
+  // For the latest MTD month we use the real days elapsed; for LMTD we use the same day count
+  // so both are on the same daily-rate basis
+  const latestMtdEntryForTable = mtdData[mtdData.length - 1];
+  const mtdSnapshotDateForTable = latestMtdEntryForTable?._mtdDate;
+  const MTD_DAY = mtdSnapshotDateForTable ? daysElapsedFromMtdDate(mtdSnapshotDateForTable) : 15;
   const getEdbAdjusted = (data: Record<string, any>[], ym: string, field: string) => {
     const total = getMonthSum(data, ym, field);
-    // EDB = daily rate (total / days elapsed)
+    // EDB = daily rate (total / days elapsed) — same divisor for both MTD and LMTD
     return total / MTD_DAY;
   };
 
@@ -418,6 +438,12 @@ export default function OverallKPI() {
       if (!ym) continue;
       if (!mtdMap.has(ym)) mtdMap.set(ym, { yearMonth: ym });
       const e = mtdMap.get(ym)!;
+      // Track the latest mtdDate for this month (for DRR calculation)
+      if ((row as any).mtdDate) {
+        const existing = e._mtdDate ? new Date(e._mtdDate) : null;
+        const incoming = new Date((row as any).mtdDate);
+        if (!existing || incoming > existing) e._mtdDate = (row as any).mtdDate;
+      }
       for (const f of Object.keys(KPI_FIELDS)) {
         const dbField = camelToDb(f);
         e[f] = (e[f] ?? 0) + (Number((row as any)[dbField] ?? (row as any)[f]) || 0);
@@ -430,6 +456,14 @@ export default function OverallKPI() {
   const lmtdMonth = latestMtdMonth ? getLMTDMonth(latestMtdMonth) : undefined;
   const yoyMonth = latestMtdMonth ? getYoYMonths(latestMtdMonth)[0] : undefined;
   const latestFmMonth = fmByMonth.length > 0 ? String(fmByMonth[fmByMonth.length - 1]?.yearMonth ?? "") : undefined;
+
+  // DRR: compute days elapsed and total days for the latest MTD month
+  const latestMtdEntry = mtdByMonth[mtdByMonth.length - 1];
+  const mtdSnapshotDate = latestMtdEntry?._mtdDate;
+  const mtdDaysElapsed = mtdSnapshotDate ? daysElapsedFromMtdDate(mtdSnapshotDate) : undefined;
+  const mtdTotalDays = latestMtdMonth ? daysInYearMonth(latestMtdMonth) : undefined;
+  const isPartialMtd = mtdDaysElapsed != null && mtdTotalDays != null && mtdDaysElapsed < mtdTotalDays;
+  const asOfLabel = mtdSnapshotDate ? formatAsOfDate(mtdSnapshotDate) : undefined;
 
   const getMonthData = (data: Record<string, any>[], ym: string | undefined) => {
     if (!ym) return {};
@@ -473,6 +507,11 @@ export default function OverallKPI() {
             <h1 className="text-xl font-bold text-foreground">Overall KPI Performance</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
               Inner Jakarta · Monthly trend & MTD vs LMTD analysis
+              {asOfLabel && (
+                <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                  Data as of {asOfLabel}{isPartialMtd && mtdDaysElapsed && mtdTotalDays ? ` (${mtdDaysElapsed}/${mtdTotalDays} days)` : ""}
+                </span>
+              )}
             </p>
           </div>
         </div>
@@ -535,6 +574,11 @@ export default function OverallKPI() {
                     yoyValue={yoyMonth && yoyData[field] ? Number(yoyData[field]) : undefined}
                     unit={kpi.unit}
                     divisor={kpi.divisor}
+                    projectedValue={isPartialMtd && mtdDaysElapsed && mtdTotalDays
+                      ? projectFullMonth(Number(mtdLatest[field]) || 0, mtdDaysElapsed, mtdTotalDays)
+                      : undefined}
+                    daysElapsed={mtdDaysElapsed}
+                    totalDays={mtdTotalDays}
                   />
                 </div>
               );

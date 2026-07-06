@@ -150,3 +150,39 @@ export function getLMTDMonth(currentYm: string): string {
   if (prevMonth === 0) return `${year - 1}12`;
   return `${year}${String(prevMonth).padStart(2, "0")}`;
 }
+
+// ─── Daily Run Rate helpers ───────────────────────────────────────────────────
+
+/** Returns the number of days in a given YYYYMM month string */
+export function daysInYearMonth(ym: string): number {
+  const year = parseInt(ym.slice(0, 4));
+  const month = parseInt(ym.slice(4, 6));
+  return new Date(year, month, 0).getDate();
+}
+
+/**
+ * Given the mtdDate (ISO string or Date from the DB), returns the day-of-month
+ * (1-based) that the MTD snapshot covers.
+ * e.g. "2026-07-04T00:00:00.000Z" → 4
+ */
+export function daysElapsedFromMtdDate(mtdDate: string | Date | null | undefined): number {
+  if (!mtdDate) return 1;
+  const d = new Date(mtdDate);
+  return d.getUTCDate();
+}
+
+/**
+ * Project a partial-month MTD value to a full-month equivalent.
+ * projected = mtdValue / daysElapsed * totalDaysInMonth
+ */
+export function projectFullMonth(mtdValue: number, daysElapsed: number, totalDays: number): number {
+  if (!daysElapsed || daysElapsed <= 0) return mtdValue;
+  return (mtdValue / daysElapsed) * totalDays;
+}
+
+/** Format a date to "Jul 4" style label */
+export function formatAsOfDate(mtdDate: string | Date | null | undefined): string {
+  if (!mtdDate) return "";
+  const d = new Date(mtdDate);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}

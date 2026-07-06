@@ -254,6 +254,7 @@ export async function getMtdTrend(filter: KpiFilter) {
     .select({
       yearMonth: mtdRaw.yearMonth,
       brand: mtdRaw.brand,
+      mtdDate: sql<string>`MAX(${mtdRaw.mtd})`,
       revPrepaid: sql<number>`SUM(${mtdRaw.revPrepaid})`,
       subsRgu90d: sql<number>`SUM(${mtdRaw.subsRgu90d})`,
       subsRgu30d: sql<number>`SUM(${mtdRaw.subsRgu30d})`,
