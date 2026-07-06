@@ -347,6 +347,16 @@ function BrandPerformanceTable({
 // ─── Revenue Breakdown Panel ─────────────────────────────────────────────────
 type KpiKey = "revPrepaid" | "revBase" | "revAcqM0" | "revOrganic" | "revTrade" | "revNonTrade";
 
+
+const KPI_META: Record<KpiKey, { label: string; accentColor: string }> = {
+  revPrepaid:  { label: "Total Revenue",         accentColor: BRAND_COLORS["IOH"] },
+  revBase:     { label: "Base Revenue",           accentColor: "oklch(0.65 0.18 220)" },
+  revAcqM0:    { label: "Acquisition Revenue",    accentColor: "oklch(0.78 0.16 75)" },
+  revOrganic:  { label: "Organic Channel",        accentColor: "oklch(0.72 0.18 160)" },
+  revTrade:    { label: "Trade Channel",          accentColor: "oklch(0.70 0.18 280)" },
+  revNonTrade: { label: "Non-Trade Channel",      accentColor: "oklch(0.68 0.20 340)" },
+};
+
 // Defines which sub-components to show when a KPI card is clicked
 const BREAKDOWN_MAP: Record<KpiKey, KpiKey[]> = {
   revPrepaid:  ["revBase", "revAcqM0", "revOrganic", "revTrade", "revNonTrade"],
@@ -470,15 +480,6 @@ function RevenueBreakdownPanel({
 }
 
 // ─── Kabupaten Drill-Down Table ──────────────────────────────────────────────
-
-const KPI_META: Record<KpiKey, { label: string; accentColor: string }> = {
-  revPrepaid:  { label: "Total Revenue",         accentColor: BRAND_COLORS["IOH"] },
-  revBase:     { label: "Base Revenue",           accentColor: "oklch(0.65 0.18 220)" },
-  revAcqM0:    { label: "Acquisition Revenue",    accentColor: "oklch(0.78 0.16 75)" },
-  revOrganic:  { label: "Organic Channel",        accentColor: "oklch(0.72 0.18 160)" },
-  revTrade:    { label: "Trade Channel",          accentColor: "oklch(0.70 0.18 280)" },
-  revNonTrade: { label: "Non-Trade Channel",      accentColor: "oklch(0.68 0.20 340)" },
-};
 
 function KabupatenDrillDown({
   kpiKey,
