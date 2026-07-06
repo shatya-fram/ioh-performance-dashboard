@@ -33,7 +33,7 @@ export function formatValue(value: number | null | undefined, fieldName: string)
   return `${v.toFixed(3)} ${unit}`;
 }
 
-export function formatNumber(value: number | null | undefined, decimals = 1): string {
+export function formatNumber(value: number | null | undefined, decimals = 2): string {
   if (value === null || value === undefined || isNaN(value)) return "—";
   if (Math.abs(value) >= 1e12) return `${(value / 1e12).toFixed(decimals)}T`;
   if (Math.abs(value) >= 1e9) return `${(value / 1e9).toFixed(decimals)}B`;

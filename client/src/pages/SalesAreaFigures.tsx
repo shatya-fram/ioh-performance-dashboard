@@ -214,7 +214,7 @@ export default function SalesAreaFigures() {
                   tickLine={false}
                 />
                 <YAxis
-                  tickFormatter={(v) => formatNumber(v / (KPI_FIELDS[activeKpi]?.divisor ?? 1), 0)}
+                  tickFormatter={(v) => formatNumber(v / (KPI_FIELDS[activeKpi]?.divisor ?? 1), 2)}
                   tick={{ fontSize: 13, fill: "oklch(0.72 0.02 250)" }}
                   axisLine={false}
                   tickLine={false}
@@ -253,7 +253,7 @@ export default function SalesAreaFigures() {
                             if (!value) return null;
                             const div = KPI_FIELDS[activeKpi]?.divisor ?? 1;
                             const scaled = value / div;
-                            const lbl = Math.abs(scaled) >= 1000 ? `${(scaled/1000).toFixed(1)}K` : Math.abs(scaled) >= 1 ? scaled.toFixed(1) : scaled.toFixed(2);
+                            const lbl = Math.abs(scaled) >= 1000 ? `${(scaled/1000).toFixed(2)}K` : Math.abs(scaled) >= 1 ? scaled.toFixed(2) : scaled.toFixed(2);
                             return <text x={x} y={(y ?? 0) - 8} textAnchor="middle" fontSize={11} fill="oklch(0.88 0.02 250)" fontWeight={600}>{lbl}</text>;
                           }}
                         />
@@ -277,7 +277,7 @@ export default function SalesAreaFigures() {
                             if (!value) return null;
                             const div = KPI_FIELDS[activeKpi]?.divisor ?? 1;
                             const scaled = value / div;
-                            const lbl = Math.abs(scaled) >= 1000 ? `${(scaled/1000).toFixed(1)}K` : Math.abs(scaled) >= 1 ? scaled.toFixed(1) : scaled.toFixed(2);
+                            const lbl = Math.abs(scaled) >= 1000 ? `${(scaled/1000).toFixed(2)}K` : Math.abs(scaled) >= 1 ? scaled.toFixed(2) : scaled.toFixed(2);
                             return <text x={x} y={(y ?? 0) - 8} textAnchor="middle" fontSize={11} fill="oklch(0.88 0.02 250)" fontWeight={600}>{lbl}</text>;
                           }}
                         />
@@ -324,7 +324,7 @@ export default function SalesAreaFigures() {
                   const gap = calcGap(mtdVal, lmtdVal);
                   const growth = calcGrowth(mtdVal, lmtdVal);
 
-                  const fmt = (v: number) => formatNumber(v / kpi.divisor, 1);
+                  const fmt = (v: number) => formatNumber(v / kpi.divisor, 2);
 
                   return (
                     <tr
@@ -385,7 +385,7 @@ export default function SalesAreaFigures() {
                   {filter.selectedKpis.map((field) => {
                     const kpi = KPI_FIELDS[field];
                     if (!kpi) return null;
-                    const fmt = (v: number) => formatNumber(v / kpi.divisor, 1);
+                    const fmt = (v: number) => formatNumber(v / kpi.divisor, 2);
                     return (
                       <tr key={field} className="border-t border-border/30 hover:bg-accent/20">
                         <td className="py-2 px-3 font-medium text-foreground">{kpi.label}</td>

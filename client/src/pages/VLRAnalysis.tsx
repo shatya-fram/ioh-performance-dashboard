@@ -44,7 +44,7 @@ function CustomTooltip({ active, payload, label }: any) {
         <div key={p.dataKey} className="flex items-center gap-2 mb-1">
           <span className="w-2 h-2 rounded-full" style={{ background: p.color }} />
           <span className="text-muted-foreground">{p.name}:</span>
-          <span className="font-medium text-foreground">{formatNumber(p.value, 1)}K</span>
+          <span className="font-medium text-foreground">{formatNumber(p.value, 2)}K</span>
         </div>
       ))}
     </div>
@@ -337,13 +337,13 @@ export default function VLRAnalysis() {
                       </span>
                     </td>
                     <td className="py-2.5 px-3 text-right font-medium">
-                      {formatNumber(r.mtd / 1000, 1)}K
+                      {formatNumber(r.mtd / 1000, 2)}K
                     </td>
                     <td className="py-2.5 px-3 text-right text-amber-400 font-semibold">
                       {r.mixMtd.toFixed(1)}%
                     </td>
                     <td className="py-2.5 px-3 text-right text-muted-foreground">
-                      {formatNumber(r.lmtd / 1000, 1)}K
+                      {formatNumber(r.lmtd / 1000, 2)}K
                     </td>
                     <td className="py-2.5 px-3 text-right text-muted-foreground">
                       {r.mixLmtd.toFixed(1)}%
@@ -356,7 +356,7 @@ export default function VLRAnalysis() {
                     <td className={`py-2.5 px-3 text-right font-semibold ${
                       r.gap >= 0 ? "value-positive" : "value-negative"
                     }`}>
-                      {r.gap >= 0 ? "+" : ""}{formatNumber(r.gap / 1000, 1)}K
+                      {r.gap >= 0 ? "+" : ""}{formatNumber(r.gap / 1000, 2)}K
                     </td>
                     <td className={`py-2.5 px-4 text-right ${
                       r.growth >= 0 ? "value-positive" : "value-negative"
@@ -368,15 +368,15 @@ export default function VLRAnalysis() {
                 {/* Total row */}
                 <tr className="border-t-2 border-border/40 bg-accent/5 font-semibold">
                   <td className="py-2.5 px-4 text-foreground">Total VLR</td>
-                  <td className="py-2.5 px-3 text-right">{formatNumber(totMtdSubs / 1000, 1)}K</td>
+                  <td className="py-2.5 px-3 text-right">{formatNumber(totMtdSubs / 1000, 2)}K</td>
                   <td className="py-2.5 px-3 text-right text-amber-400">100.0%</td>
-                  <td className="py-2.5 px-3 text-right text-muted-foreground">{formatNumber(totLmtdSubs / 1000, 1)}K</td>
+                  <td className="py-2.5 px-3 text-right text-muted-foreground">{formatNumber(totLmtdSubs / 1000, 2)}K</td>
                   <td className="py-2.5 px-3 text-right text-muted-foreground">100.0%</td>
                   <td className="py-2.5 px-3 text-right text-muted-foreground">—</td>
                   <td className={`py-2.5 px-3 text-right ${
                     totGap >= 0 ? "value-positive" : "value-negative"
                   }`}>
-                    {totGap >= 0 ? "+" : ""}{formatNumber(totGap / 1000, 1)}K
+                    {totGap >= 0 ? "+" : ""}{formatNumber(totGap / 1000, 2)}K
                   </td>
                   <td className={`py-2.5 px-4 text-right ${
                     totGrowth >= 0 ? "value-positive" : "value-negative"
@@ -457,10 +457,10 @@ export default function VLRAnalysis() {
                           {r.brand}
                         </span>
                       </td>
-                      <td className="py-2 px-3 text-right text-foreground">{formatNumber(r.current / 1000, 1)}K</td>
-                      <td className="py-2 px-3 text-right text-muted-foreground">{formatNumber(r.previous / 1000, 1)}K</td>
+                      <td className="py-2 px-3 text-right text-foreground">{formatNumber(r.current / 1000, 2)}K</td>
+                      <td className="py-2 px-3 text-right text-muted-foreground">{formatNumber(r.previous / 1000, 2)}K</td>
                       <td className={`py-2 px-3 text-right font-semibold ${r.gap >= 0 ? "value-positive" : "value-negative"}`}>
-                        {r.gap >= 0 ? "+" : ""}{formatNumber(r.gap / 1000, 1)}K
+                        {r.gap >= 0 ? "+" : ""}{formatNumber(r.gap / 1000, 2)}K
                       </td>
                       <td className={`py-2 px-3 text-right ${(r.growth ?? 0) >= 0 ? "value-positive" : "value-negative"}`}>
                         {r.growth !== null ? `${r.growth >= 0 ? "+" : ""}${(r.growth * 100).toFixed(1)}%` : "—"}
@@ -544,7 +544,7 @@ export default function VLRAnalysis() {
                           <span className={`font-bold tabular-nums ${
                             gap >= 0 ? "value-positive" : "value-negative"
                           }`}>
-                            {gap >= 0 ? "+" : ""}{(gap / 1000).toFixed(1)}K
+                            {gap >= 0 ? "+" : ""}{(gap / 1000).toFixed(2)}K
                           </span>
                         </div>
                       );
@@ -595,7 +595,7 @@ export default function VLRAnalysis() {
                   margin={{ top: 5, right: 30, left: 120, bottom: 5 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.25 0.03 250)" horizontal={false} />
-                  <XAxis type="number" tick={{ fontSize: 10, fill: "oklch(0.60 0.02 250)" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v.toFixed(1)}K`} />
+                  <XAxis type="number" tick={{ fontSize: 10, fill: "oklch(0.60 0.02 250)" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v.toFixed(2)}K`} />
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: "oklch(0.75 0.02 250)" }} axisLine={false} tickLine={false} width={115} />
                   <Tooltip contentStyle={{ background: "oklch(0.14 0.022 250)", border: "1px solid oklch(0.25 0.03 250)", borderRadius: "8px", fontSize: "11px" }} />
                   <ReferenceLine x={0} stroke="oklch(0.40 0.04 250)" />
@@ -628,7 +628,7 @@ export default function VLRAnalysis() {
                   margin={{ top: 5, right: 30, left: 120, bottom: 5 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.25 0.03 250)" horizontal={false} />
-                  <XAxis type="number" tick={{ fontSize: 10, fill: "oklch(0.60 0.02 250)" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v.toFixed(1)}K`} />
+                  <XAxis type="number" tick={{ fontSize: 10, fill: "oklch(0.60 0.02 250)" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v.toFixed(2)}K`} />
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: "oklch(0.75 0.02 250)" }} axisLine={false} tickLine={false} width={115} />
                   <Tooltip contentStyle={{ background: "oklch(0.14 0.022 250)", border: "1px solid oklch(0.25 0.03 250)", borderRadius: "8px", fontSize: "11px" }} />
                   <ReferenceLine x={0} stroke="oklch(0.40 0.04 250)" />
@@ -662,7 +662,7 @@ export default function VLRAnalysis() {
                 margin={{ top: 5, right: 30, left: 160, bottom: 5 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.25 0.03 250)" horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 10, fill: "oklch(0.60 0.02 250)" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v.toFixed(1)}K`} />
+                <XAxis type="number" tick={{ fontSize: 10, fill: "oklch(0.60 0.02 250)" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v.toFixed(2)}K`} />
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: "oklch(0.75 0.02 250)" }} axisLine={false} tickLine={false} width={155} />
                 <Tooltip contentStyle={{ background: "oklch(0.14 0.022 250)", border: "1px solid oklch(0.25 0.03 250)", borderRadius: "8px", fontSize: "11px" }} />
                 <ReferenceLine x={0} stroke="oklch(0.40 0.04 250)" />
@@ -797,12 +797,12 @@ export default function VLRAnalysis() {
                       <td className="py-2 px-4 text-muted-foreground">{i + 1}</td>
                       <td className="py-2 px-4 font-medium text-foreground">{r.kecamatan}</td>
                       <td className="py-2 px-3 text-muted-foreground text-[11px]">{r.kabkot}</td>
-                      <td className="py-2 px-3 text-right font-medium">{(r.vlrMtd / 1000).toFixed(1)}K</td>
-                      <td className="py-2 px-3 text-right text-muted-foreground">{(r.vlrLmtd / 1000).toFixed(1)}K</td>
+                      <td className="py-2 px-3 text-right font-medium">{(r.vlrMtd / 1000).toFixed(2)}K</td>
+                      <td className="py-2 px-3 text-right text-muted-foreground">{(r.vlrLmtd / 1000).toFixed(2)}K</td>
                       <td className={`py-2 px-3 text-right font-semibold ${
                         r.vlrGap >= 0 ? "value-positive" : "value-negative"
                       }`}>
-                        {r.vlrGap >= 0 ? "+" : ""}{(r.vlrGap / 1000).toFixed(1)}K
+                        {r.vlrGap >= 0 ? "+" : ""}{(r.vlrGap / 1000).toFixed(2)}K
                       </td>
                       <td className={`py-2 px-3 text-right ${
                         r.vlrGrowth >= 0 ? "value-positive" : "value-negative"
@@ -816,12 +816,12 @@ export default function VLRAnalysis() {
                           </span>
                         ) : "—"}
                       </td>
-                      <td className="py-2 px-3 text-right font-medium">{(r.hvcMtd / 1000).toFixed(1)}K</td>
-                      <td className="py-2 px-3 text-right text-muted-foreground">{(r.hvcLmtd / 1000).toFixed(1)}K</td>
+                      <td className="py-2 px-3 text-right font-medium">{(r.hvcMtd / 1000).toFixed(2)}K</td>
+                      <td className="py-2 px-3 text-right text-muted-foreground">{(r.hvcLmtd / 1000).toFixed(2)}K</td>
                       <td className={`py-2 px-3 text-right font-semibold ${
                         r.hvcGap >= 0 ? "value-positive" : "value-negative"
                       }`}>
-                        {r.hvcGap >= 0 ? "+" : ""}{(r.hvcGap / 1000).toFixed(1)}K
+                        {r.hvcGap >= 0 ? "+" : ""}{(r.hvcGap / 1000).toFixed(2)}K
                       </td>
                       <td className={`py-2 px-4 text-right ${
                         r.hvcGrowth >= 0 ? "value-positive" : "value-negative"

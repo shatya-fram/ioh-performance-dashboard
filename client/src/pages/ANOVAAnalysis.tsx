@@ -13,9 +13,9 @@ function fmtRev(v: number): string {
   const sign = v < 0 ? "-" : "";
   if (abs >= 1e12) return `${sign}${(abs / 1e12).toFixed(2)} T`;
   if (abs >= 1e9) return `${sign}${(abs / 1e9).toFixed(2)} Bn`;
-  if (abs >= 1e6) return `${sign}${(abs / 1e6).toFixed(1)} Mn`;
-  if (abs >= 1e3) return `${sign}${(abs / 1e3).toFixed(1)} K`;
-  return `${sign}${abs.toFixed(0)}`;
+  if (abs >= 1e6) return `${sign}${(abs / 1e6).toFixed(2)} Mn`;
+  if (abs >= 1e3) return `${sign}${(abs / 1e3).toFixed(2)} K`;
+  return `${sign}${abs.toFixed(2)}`;
 }
 
 function fmtGap(v: number): string {
@@ -547,21 +547,24 @@ export default function ANOVAAnalysis() {
   });
 
   // ─── Period resolution ────────────────────────────────────────────────────
-  const { mtdMonths, latestMtd, prevMtd } = useMemo(() => {
-    if (!mtdQuery.data) return { mtdMonths: [], latestMtd: "", prevMtd: "" };
-    const months = Array.from(new Set(mtdQuery.data.map((r) => String(r.yearMonth ?? "")))).sort();
+  // fm_raw = same-day daily snapshots: MTD (latest month) and LMTD (previous month same day)
+  const { fmMonths, latestMtd, prevMtd } = useMemo(() => {
+    if (!fmQuery.data) return { fmMonths: [], latestMtd: "", prevMtd: "" };
+    const months = Array.from(new Set(fmQuery.data.map((r) => String(r.yearMonth ?? "")))).sort();
     return {
-      mtdMonths: months,
+      fmMonths: months,
       latestMtd: months[months.length - 1] ?? "",
       prevMtd: months[months.length - 2] ?? "",
     };
-  }, [mtdQuery.data]);
-
-  const { fmMonths, latestFm } = useMemo(() => {
-    if (!fmQuery.data) return { fmMonths: [], latestFm: "" };
-    const months = Array.from(new Set(fmQuery.data.map((r) => String(r.yearMonth ?? "")))).sort();
-    return { fmMonths: months, latestFm: months[months.length - 1] ?? "" };
   }, [fmQuery.data]);
+
+  // mtd_raw = full-month totals: Last FM = most recent full month before current MTD
+  const { mtdMonths, latestFm } = useMemo(() => {
+    if (!mtdQuery.data) return { mtdMonths: [], latestFm: "" };
+    const months = Array.from(new Set(mtdQuery.data.map((r) => String(r.yearMonth ?? "")))).sort();
+    const lastFmMonth = months.filter(m => m < (latestMtd || "999999")).at(-1) ?? "";
+    return { mtdMonths: months, latestFm: lastFmMonth };
+  }, [mtdQuery.data, latestMtd]);
 
   // ─── Aggregate helpers ────────────────────────────────────────────────────
   type RevFields = {
@@ -608,18 +611,19 @@ export default function ANOVAAnalysis() {
   }
 
   // ─── IOH (combined) aggregates ────────────────────────────────────────────
-  const iohMtd = useMemo(() => sumRows(mtdQuery.data ?? [], latestMtd), [mtdQuery.data, latestMtd]);
-  const iohLmtd = useMemo(() => sumRows(mtdQuery.data ?? [], prevMtd), [mtdQuery.data, prevMtd]);
-  const iohFm = useMemo(() => sumRows(fmQuery.data ?? [], latestFm), [fmQuery.data, latestFm]);
+  // MTD + LMTD from fm_raw (same-day snapshots); Last FM from mtd_raw (full month)
+  const iohMtd = useMemo(() => sumRows(fmQuery.data ?? [], latestMtd), [fmQuery.data, latestMtd]);
+  const iohLmtd = useMemo(() => sumRows(fmQuery.data ?? [], prevMtd), [fmQuery.data, prevMtd]);
+  const iohFm = useMemo(() => sumRows(mtdQuery.data ?? [], latestFm), [mtdQuery.data, latestFm]);
 
-  // ─── Per-brand aggregates ─────────────────────────────────────────────────
-  const im3Mtd = useMemo(() => sumRowsByBrand(mtdQuery.data ?? [], latestMtd, "IM3"), [mtdQuery.data, latestMtd]);
-  const im3Lmtd = useMemo(() => sumRowsByBrand(mtdQuery.data ?? [], prevMtd, "IM3"), [mtdQuery.data, prevMtd]);
-  const im3Fm = useMemo(() => sumRowsByBrand(fmQuery.data ?? [], latestFm, "IM3"), [fmQuery.data, latestFm]);
+  // ─── Per-brand aggregates ───────────────────────────────────────────────────
+  const im3Mtd = useMemo(() => sumRowsByBrand(fmQuery.data ?? [], latestMtd, "IM3"), [fmQuery.data, latestMtd]);
+  const im3Lmtd = useMemo(() => sumRowsByBrand(fmQuery.data ?? [], prevMtd, "IM3"), [fmQuery.data, prevMtd]);
+  const im3Fm = useMemo(() => sumRowsByBrand(mtdQuery.data ?? [], latestFm, "IM3"), [mtdQuery.data, latestFm]);
 
-  const sid3Mtd = useMemo(() => sumRowsByBrand(mtdQuery.data ?? [], latestMtd, "3ID"), [mtdQuery.data, latestMtd]);
-  const sid3Lmtd = useMemo(() => sumRowsByBrand(mtdQuery.data ?? [], prevMtd, "3ID"), [mtdQuery.data, prevMtd]);
-  const sid3Fm = useMemo(() => sumRowsByBrand(fmQuery.data ?? [], latestFm, "3ID"), [fmQuery.data, latestFm]);
+  const sid3Mtd = useMemo(() => sumRowsByBrand(fmQuery.data ?? [], latestMtd, "3ID"), [fmQuery.data, latestMtd]);
+  const sid3Lmtd = useMemo(() => sumRowsByBrand(fmQuery.data ?? [], prevMtd, "3ID"), [fmQuery.data, prevMtd]);
+  const sid3Fm = useMemo(() => sumRowsByBrand(mtdQuery.data ?? [], latestFm, "3ID"), [mtdQuery.data, latestFm]);
 
   // ─── Voucher game effect ──────────────────────────────────────────────────
   const { voucherIm3, voucher3id, voucherTotal } = useMemo(() => {

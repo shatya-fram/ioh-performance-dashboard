@@ -14,8 +14,8 @@ function fmtRev(v: number | null | undefined) {
   if (abs >= 1_000) return (bn / 1_000).toFixed(2) + " T Bn";
   if (abs >= 1) return bn.toFixed(2) + " Bn";
   const mn = v / 1_000_000;
-  if (Math.abs(mn) >= 1) return mn.toFixed(1) + " Mn";
-  return (v / 1_000).toFixed(1) + " K";
+  if (Math.abs(mn) >= 1) return mn.toFixed(2) + " Mn";
+  return (v / 1_000).toFixed(2) + " K";
 }
 
 function calcGrowth(mtd: number, lmtd: number) {
@@ -28,7 +28,7 @@ function GrowthCell({ mtd, lmtd }: { mtd: number; lmtd: number }) {
   if (pct == null) return <td className="px-3 py-2 text-center text-gray-500">—</td>;
   const color = pct >= 0 ? "text-emerald-400" : "text-red-400";
   const arrow = pct >= 0 ? "▲" : "▼";
-  return <td className={`px-3 py-2 text-center font-semibold ${color}`}>{arrow} {Math.abs(pct).toFixed(1)}%</td>;
+  return <td className={`px-3 py-2 text-center font-semibold ${color}`}>{arrow} {Math.abs(pct).toFixed(2)}%</td>;
 }
 
 function GapCell({ mtd, lmtd }: { mtd: number; lmtd: number }) {

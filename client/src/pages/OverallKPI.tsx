@@ -62,8 +62,8 @@ function KpiCard({
 
   const fmt = (v: number) => {
     const scaled = v / divisor;
-    if (Math.abs(scaled) >= 1000) return `${(scaled / 1000).toFixed(1)}K`;
-    if (Math.abs(scaled) >= 1) return scaled.toFixed(1);
+    if (Math.abs(scaled) >= 1000) return `${(scaled / 1000).toFixed(2)}K`;
+    if (Math.abs(scaled) >= 1) return scaled.toFixed(2);
     return scaled.toFixed(2);
   };
 
@@ -133,8 +133,8 @@ function ChartDataLabel({ x, y, value, divisor, width }: any) {
   if (value === undefined || value === null || value === 0) return null;
   const scaled = value / divisor;
   let label: string;
-  if (Math.abs(scaled) >= 1000) label = `${(scaled / 1000).toFixed(1)}K`;
-  else if (Math.abs(scaled) >= 1) label = scaled.toFixed(1);
+  if (Math.abs(scaled) >= 1000) label = `${(scaled / 1000).toFixed(2)}K`;
+  else if (Math.abs(scaled) >= 1) label = scaled.toFixed(2);
   else label = scaled.toFixed(2);
 
   // For bars, center horizontally; for lines use x directly
@@ -184,8 +184,8 @@ function MiniKpiCard({
 
   const fmt = (v: number) => {
     const s = v / divisor;
-    if (Math.abs(s) >= 1000) return `${(s / 1000).toFixed(1)}K`;
-    if (Math.abs(s) >= 1) return s.toFixed(1);
+    if (Math.abs(s) >= 1000) return `${(s / 1000).toFixed(2)}K`;
+    if (Math.abs(s) >= 1) return s.toFixed(2);
     return s.toFixed(2);
   };
 
@@ -312,7 +312,7 @@ function GrowthTable({
             const lmtdVal = getValue(fmData, lmtdMonth, field);
             const gap = calcGap(mtdVal, lmtdVal);
             const momGrowth = calcGrowth(mtdVal, lmtdVal);
-            const fmtVal = (v: number) => formatNumber(v / kpi.divisor, 1);
+            const fmtVal = (v: number) => formatNumber(v / kpi.divisor, 2);
 
             return (
               <tr key={field} className="border-t border-border/30 hover:bg-accent/20 transition-colors">
