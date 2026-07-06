@@ -44,9 +44,6 @@ function KpiCard({
   yoyValue,
   unit,
   divisor,
-  projectedValue,
-  daysElapsed,
-  totalDays,
 }: {
   label: string;
   mtdValue: number;
@@ -55,18 +52,13 @@ function KpiCard({
   yoyValue?: number;
   unit: string;
   divisor: number;
-  projectedValue?: number;
-  daysElapsed?: number;
-  totalDays?: number;
 }) {
-  // Compare projected full-month vs LMTD for a fair apples-to-apples view
-  const compareValue = projectedValue != null ? projectedValue : mtdValue;
-  const gap = calcGap(compareValue, lmtdValue);
-  const growth = calcGrowth(compareValue, lmtdValue);
+  // MTD vs LMTD: both are same-day snapshots from fm_raw (apples-to-apples)
+  const gap = calcGap(mtdValue, lmtdValue);
+  const growth = calcGrowth(mtdValue, lmtdValue);
   const isPositive = gap >= 0;
-  const yoyGrowth = yoyValue != null && yoyValue !== 0 ? calcGrowth(compareValue, yoyValue) : null;
+  const yoyGrowth = yoyValue != null && yoyValue !== 0 ? calcGrowth(mtdValue, yoyValue) : null;
   const yoyIsPos = yoyGrowth != null && yoyGrowth >= 0;
-  const isPartialMonth = daysElapsed != null && totalDays != null && daysElapsed < totalDays;
 
   const fmt = (v: number) => {
     const scaled = v / divisor;
@@ -83,22 +75,15 @@ function KpiCard({
         </p>
         <span className="text-sm text-muted-foreground">{unit}</span>
       </div>
-      <div className="mb-2 flex items-baseline gap-2">
+      <div className="mb-2">
         <span className="text-3xl font-bold text-foreground">{fmt(mtdValue)}</span>
-        {isPartialMonth && projectedValue != null && (
-          <span className="text-sm text-amber-400 font-medium" title={`Projected full month based on ${daysElapsed}/${totalDays} days`}>
-            → {fmt(projectedValue)} proj.
-          </span>
-        )}
       </div>
       <div className="flex items-center gap-2">
         <span className={`flex items-center gap-1 text-sm font-semibold ${isPositive ? "value-positive" : "value-negative"}`}>
           {isPositive ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
           {formatPercent(growth)}
         </span>
-        <span className="text-sm text-muted-foreground">
-          {isPartialMonth ? "proj vs LMTD" : "vs LMTD"}
-        </span>
+        <span className="text-sm text-muted-foreground">vs LMTD</span>
         <span className={`text-sm ml-auto ${isPositive ? "value-positive" : "value-negative"}`}>
           {isPositive ? "+" : ""}{fmt(gap)}
         </span>
@@ -243,30 +228,28 @@ function GrowthTable({
   mtdData,
   selectedKpis,
 }: {
-  fmData: Record<string, any>[];
-  mtdData: Record<string, any>[];
+  fmData: Record<string, any>[];  // fm_raw same-day snapshots (for MTD + LMTD)
+  mtdData: Record<string, any>[];  // mtd_raw full-month (for Last FM reference only)
   selectedKpis: string[];
 }) {
   const [basisMode, setBasisMode] = useState<"total" | "edb">("total");
-  const latestFmMonth = fmData[fmData.length - 1]?.yearMonth as string | undefined;
-  const latestMtdMonth = mtdData[mtdData.length - 1]?.yearMonth as string | undefined;
+  // Use fm_raw for MTD and LMTD (same-day snapshots)
+  const latestMtdMonth = fmData[fmData.length - 1]?.yearMonth as string | undefined;
 
-  if (!latestFmMonth || !latestMtdMonth) return null;
+  if (!latestMtdMonth) return null;
 
   const lmtdMonth = getLMTDMonth(latestMtdMonth);
 
   const getMonthSum = (data: Record<string, any>[], ym: string, field: string) =>
     data.filter((r) => String(r.yearMonth) === ym).reduce((s, r) => s + (Number(r[field]) || 0), 0);
 
-  // EDB = Equal Day Basis: revenue per day, using the actual snapshot date from the DB
-  // For the latest MTD month we use the real days elapsed; for LMTD we use the same day count
-  // so both are on the same daily-rate basis
-  const latestMtdEntryForTable = mtdData[mtdData.length - 1];
-  const mtdSnapshotDateForTable = latestMtdEntryForTable?._mtdDate;
-  const MTD_DAY = mtdSnapshotDateForTable ? daysElapsedFromMtdDate(mtdSnapshotDateForTable) : 15;
+  // EDB = Equal Day Basis: revenue per day
+  // Since both MTD and LMTD are same-day snapshots from fm_raw, they cover the same number of days
+  // EDB here divides by the day-of-month to get daily rate
+  const latestFmEntry = fmData[fmData.length - 1];
+  const MTD_DAY = latestFmEntry?._snapshotDay ?? 4; // fallback to 4 if not available
   const getEdbAdjusted = (data: Record<string, any>[], ym: string, field: string) => {
     const total = getMonthSum(data, ym, field);
-    // EDB = daily rate (total / days elapsed) — same divisor for both MTD and LMTD
     return total / MTD_DAY;
   };
 
@@ -325,8 +308,8 @@ function GrowthTable({
           {selectedKpis.map((field) => {
             const kpi = KPI_FIELDS[field];
             if (!kpi) return null;
-            const mtdVal = getValue(mtdData, latestMtdMonth, field);
-            const lmtdVal = getValue(mtdData, lmtdMonth, field);
+            const mtdVal = getValue(fmData, latestMtdMonth, field);
+            const lmtdVal = getValue(fmData, lmtdMonth, field);
             const gap = calcGap(mtdVal, lmtdVal);
             const momGrowth = calcGrowth(mtdVal, lmtdVal);
             const fmtVal = (v: number) => formatNumber(v / kpi.divisor, 1);
@@ -369,7 +352,10 @@ export default function OverallKPI() {
     kabkots: kabkotsArray.length ? kabkotsArray : undefined,
   });
 
-  // ─── FM aggregation by month (all brands combined) ────────────────────────
+  // ─── FM aggregation by month (all brands combined) ─────────────────────────
+  // fm_raw = same-day daily snapshots (Jul 4, Jun 4, May 4...)
+  // Used for: MTD (latest month), LMTD (previous month same day), YoY
+  // fmByMonth includes ALL months including current partial month
   const fmByMonth = useMemo(() => {
     if (!fmQuery.data) return [];
     const map = new Map<string, Record<string, number>>();
@@ -387,15 +373,17 @@ export default function OverallKPI() {
         e[f] = (e[f] ?? 0) + (Number((row as any)[dbField] ?? (row as any)[f]) || 0);
       }
     }
-    const sorted = Array.from(map.values()).sort((a, b) => String(a.yearMonth).localeCompare(String(b.yearMonth)));
-    // AMENDMENT 5: Remove the latest month (June 2026 / current incomplete month)
-    // Keep only months where we have a full month — drop the last entry if it's the current month
-    const now = new Date();
-    const currentYm = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
-    return sorted.filter((r) => String(r.yearMonth) < currentYm);
+    return Array.from(map.values()).sort((a, b) => String(a.yearMonth).localeCompare(String(b.yearMonth)));
   }, [fmQuery.data]);
 
-  // ─── FM aggregation by month + brand (for multi-line/bar) ─────────────────
+  // fmByMonthForChart: excludes current partial month (for trend chart only)
+  const fmByMonthForChart = useMemo(() => {
+    const now = new Date();
+    const currentYm = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
+    return fmByMonth.filter((r) => String(r.yearMonth) < currentYm);
+  }, [fmByMonth]);
+
+  // ─── FM aggregation by month + brand (for multi-line/bar chart) ─────────────
   const fmByMonthBrand = useMemo(() => {
     if (!fmQuery.data) return [];
     const brandMap = new Map<string, Record<string, number>>();
@@ -423,13 +411,14 @@ export default function OverallKPI() {
       }
     }
     const sorted = Array.from(byMonth.values()).sort((a, b) => String(a.yearMonth).localeCompare(String(b.yearMonth)));
-    // AMENDMENT 5: Remove current incomplete month
+    // Exclude current partial month from chart
     const now = new Date();
     const currentYm = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
     return sorted.filter((r) => String(r.yearMonth) < currentYm);
   }, [fmQuery.data]);
 
-  // ─── MTD aggregation ──────────────────────────────────────────────────────
+  // ─── MTD full-month aggregation (mtd_raw = end-of-month totals) ─────────────
+  // Used ONLY for: Last FM (previous full month total)
   const mtdByMonth = useMemo(() => {
     if (!mtdQuery.data) return [];
     const mtdMap = new Map<string, Record<string, any>>();
@@ -438,12 +427,6 @@ export default function OverallKPI() {
       if (!ym) continue;
       if (!mtdMap.has(ym)) mtdMap.set(ym, { yearMonth: ym });
       const e = mtdMap.get(ym)!;
-      // Track the latest mtdDate for this month (for DRR calculation)
-      if ((row as any).mtdDate) {
-        const existing = e._mtdDate ? new Date(e._mtdDate) : null;
-        const incoming = new Date((row as any).mtdDate);
-        if (!existing || incoming > existing) e._mtdDate = (row as any).mtdDate;
-      }
       for (const f of Object.keys(KPI_FIELDS)) {
         const dbField = camelToDb(f);
         e[f] = (e[f] ?? 0) + (Number((row as any)[dbField] ?? (row as any)[f]) || 0);
@@ -452,28 +435,37 @@ export default function OverallKPI() {
     return Array.from(mtdMap.values()).sort((a, b) => String(a.yearMonth).localeCompare(String(b.yearMonth)));
   }, [mtdQuery.data]);
 
-  const latestMtdMonth = mtdByMonth.length > 0 ? String(mtdByMonth[mtdByMonth.length - 1]?.yearMonth ?? "") : undefined;
+  // ─── Key month identifiers ────────────────────────────────────────────────
+  // MTD = latest month in fm_raw (same-day snapshot)
+  const latestMtdMonth = fmByMonth.length > 0 ? String(fmByMonth[fmByMonth.length - 1]?.yearMonth ?? "") : undefined;
+  // LMTD = previous month in fm_raw (same day of previous month)
   const lmtdMonth = latestMtdMonth ? getLMTDMonth(latestMtdMonth) : undefined;
+  // YoY = same month last year in fm_raw
   const yoyMonth = latestMtdMonth ? getYoYMonths(latestMtdMonth)[0] : undefined;
-  const latestFmMonth = fmByMonth.length > 0 ? String(fmByMonth[fmByMonth.length - 1]?.yearMonth ?? "") : undefined;
-
-  // DRR: compute days elapsed and total days for the latest MTD month
-  const latestMtdEntry = mtdByMonth[mtdByMonth.length - 1];
-  const mtdSnapshotDate = latestMtdEntry?._mtdDate;
-  const mtdDaysElapsed = mtdSnapshotDate ? daysElapsedFromMtdDate(mtdSnapshotDate) : undefined;
-  const mtdTotalDays = latestMtdMonth ? daysInYearMonth(latestMtdMonth) : undefined;
-  const isPartialMtd = mtdDaysElapsed != null && mtdTotalDays != null && mtdDaysElapsed < mtdTotalDays;
-  const asOfLabel = mtdSnapshotDate ? formatAsOfDate(mtdSnapshotDate) : undefined;
+  // Last FM = previous full month from mtd_raw
+  const latestFmMonth = mtdByMonth.length > 0
+    ? String(mtdByMonth.filter(r => String(r.yearMonth) < (latestMtdMonth ?? "999999")).slice(-1)[0]?.yearMonth ?? "")
+    : undefined;
 
   const getMonthData = (data: Record<string, any>[], ym: string | undefined) => {
     if (!ym) return {};
     return data.find((r) => String(r.yearMonth) === ym) ?? {};
   };
 
-  const mtdLatest = getMonthData(mtdByMonth, latestMtdMonth);
-  const lmtdData = getMonthData(mtdByMonth, lmtdMonth);
-  const yoyData = getMonthData(mtdByMonth, yoyMonth);
-  const fmLatest = getMonthData(fmByMonth, latestFmMonth);
+  // MTD and LMTD from fm_raw (same-day snapshots — apples-to-apples comparison)
+  const mtdLatest = getMonthData(fmByMonth, latestMtdMonth);
+  const lmtdData = getMonthData(fmByMonth, lmtdMonth);
+  const yoyData = getMonthData(fmByMonth, yoyMonth);
+  // Last FM from mtd_raw (full previous month)
+  const fmLatest = getMonthData(mtdByMonth, latestFmMonth);
+
+  // Data-as-of label from fm_raw snapshot dates (mtdDate added to getFmTrend)
+  const asOfLabel = useMemo(() => {
+    if (!latestMtdMonth || !fmQuery.data) return undefined;
+    const latestFmRow = fmQuery.data.find(r => String(r.yearMonth) === latestMtdMonth);
+    const d = (latestFmRow as any)?.mtdDate;
+    return d ? formatAsOfDate(d) : undefined;
+  }, [latestMtdMonth, fmQuery.data]);
 
   const isLoading = fmQuery.isLoading || mtdQuery.isLoading;
   const hasData = fmByMonth.length > 0 || mtdByMonth.length > 0;
@@ -509,7 +501,7 @@ export default function OverallKPI() {
               Inner Jakarta · Monthly trend & MTD vs LMTD analysis
               {asOfLabel && (
                 <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                  Data as of {asOfLabel}{isPartialMtd && mtdDaysElapsed && mtdTotalDays ? ` (${mtdDaysElapsed}/${mtdTotalDays} days)` : ""}
+                  Data as of {asOfLabel}
                 </span>
               )}
             </p>
@@ -574,11 +566,6 @@ export default function OverallKPI() {
                     yoyValue={yoyMonth && yoyData[field] ? Number(yoyData[field]) : undefined}
                     unit={kpi.unit}
                     divisor={kpi.divisor}
-                    projectedValue={isPartialMtd && mtdDaysElapsed && mtdTotalDays
-                      ? projectFullMonth(Number(mtdLatest[field]) || 0, mtdDaysElapsed, mtdTotalDays)
-                      : undefined}
-                    daysElapsed={mtdDaysElapsed}
-                    totalDays={mtdTotalDays}
                   />
                 </div>
               );

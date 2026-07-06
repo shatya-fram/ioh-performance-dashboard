@@ -118,17 +118,29 @@ export default function SalesAreaFigures() {
     return Array.from(byMonth.values()).sort((a, b) => String(a.yearMonth).localeCompare(String(b.yearMonth)));
   }, [mtdQuery.data]);
 
+  // fm_raw = same-day snapshots; use for MTD (latest) and LMTD (prev month same day)
+  // mtd_raw = full-month totals; use only for Last FM
   const months = useMemo(() => fmByMonthBrand.map((r) => String(r.yearMonth)), [fmByMonthBrand]);
-  const latestMtdMonth = mtdByMonth.length > 0 ? String(mtdByMonth[mtdByMonth.length - 1]?.yearMonth ?? "") : undefined;
+  // MTD = latest month in fm_raw
+  const latestMtdMonth = fmByMonthBrand.length > 0 ? String(fmByMonthBrand[fmByMonthBrand.length - 1]?.yearMonth ?? "") : undefined;
   const lmtdMonth = latestMtdMonth ? getLMTDMonth(latestMtdMonth) : undefined;
+  // Last FM = previous full month from mtd_raw
+  const latestFmMonth = mtdByMonth.length > 0
+    ? String(mtdByMonth.filter(r => String(r.yearMonth) < (latestMtdMonth ?? "999999")).slice(-1)[0]?.yearMonth ?? "")
+    : undefined;
 
-  const getMtdRow = (ym: string | undefined) => {
+  const getFmRow = (ym: string | undefined) => {
+    if (!ym) return {};
+    return fmByMonthBrand.find((r) => String(r.yearMonth) === ym) ?? {};
+  };
+  const getLastFmRow = (ym: string | undefined) => {
     if (!ym) return {};
     return mtdByMonth.find((r) => String(r.yearMonth) === ym) ?? {};
   };
 
-  const mtdLatest = getMtdRow(latestMtdMonth);
-  const lmtdData = getMtdRow(lmtdMonth);
+  const mtdLatest = getFmRow(latestMtdMonth);
+  const lmtdData = getFmRow(lmtdMonth);
+  const lastFmData = getLastFmRow(latestFmMonth);
 
   const brands = filter.brand === "Combined" ? ["IM3", "3ID"] : [filter.brand];
   const isLoading = fmQuery.isLoading || mtdQuery.isLoading;
