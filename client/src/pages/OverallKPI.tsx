@@ -42,6 +42,7 @@ function KpiCard({
   lmtdValue,
   fmValue,
   yoyValue,
+  yoyNumerator,
   yoyLabel,
   unit,
   divisor,
@@ -51,6 +52,7 @@ function KpiCard({
   lmtdValue: number;
   fmValue: number;
   yoyValue?: number;
+  yoyNumerator?: number;
   yoyLabel?: string;
   unit: string;
   divisor: number;
@@ -59,7 +61,9 @@ function KpiCard({
   const gap = calcGap(mtdValue, lmtdValue);
   const growth = calcGrowth(mtdValue, lmtdValue);
   const isPositive = gap >= 0;
-  const yoyGrowth = yoyValue != null && yoyValue !== 0 ? calcGrowth(mtdValue, yoyValue) : null;
+  // YoY: Last FM (numerator) vs same month last year (yoyValue)
+  const yoyNum = yoyNumerator ?? mtdValue;
+  const yoyGrowth = yoyValue != null && yoyValue !== 0 ? calcGrowth(yoyNum, yoyValue) : null;
   const yoyIsPos = yoyGrowth != null && yoyGrowth >= 0;
 
   const fmt = (v: number) => {
@@ -163,6 +167,7 @@ function MiniKpiCard({
   mtdValue,
   lmtdValue,
   yoyValue,
+  yoyNumerator,
   yoyLabel,
   divisor,
   unit,
@@ -174,6 +179,7 @@ function MiniKpiCard({
   mtdValue: number;
   lmtdValue: number;
   yoyValue?: number;
+  yoyNumerator?: number;
   yoyLabel?: string;
   divisor: number;
   unit: string;
@@ -183,7 +189,8 @@ function MiniKpiCard({
   const growth = calcGrowth(mtdValue, lmtdValue);
   const gap = calcGap(mtdValue, lmtdValue);
   const isPos = gap >= 0;
-  const yoyGrowth = yoyValue != null && yoyValue !== 0 ? calcGrowth(mtdValue, yoyValue) : null;
+  const yoyNum = yoyNumerator ?? mtdValue;
+  const yoyGrowth = yoyValue != null && yoyValue !== 0 ? calcGrowth(yoyNum, yoyValue) : null;
   const yoyIsPos = yoyGrowth != null && yoyGrowth >= 0;
 
   const fmt = (v: number) => {
@@ -444,12 +451,13 @@ export default function OverallKPI() {
   const latestMtdMonth = fmByMonth.length > 0 ? String(fmByMonth[fmByMonth.length - 1]?.yearMonth ?? "") : undefined;
   // LMTD = previous month in fm_raw (same day of previous month)
   const lmtdMonth = latestMtdMonth ? getLMTDMonth(latestMtdMonth) : undefined;
-  // YoY = same month last year from mtd_raw (full-month prior year, apples-to-apples vs projected)
-  const yoyMonth = latestMtdMonth ? getYoYMonths(latestMtdMonth)[0] : undefined;
   // Last FM = previous full month from mtd_raw
   const latestFmMonth = mtdByMonth.length > 0
     ? String(mtdByMonth.filter(r => String(r.yearMonth) < (latestMtdMonth ?? "999999")).slice(-1)[0]?.yearMonth ?? "")
     : undefined;
+  // YoY = same month last year (Last FM's year-ago equivalent from mtd_raw)
+  // Logic: Last FM = Jun 2026, YoY base = Jun 2025 (same month, prior year)
+  const yoyMonth = latestFmMonth ? getYoYMonths(latestFmMonth)[0] : undefined;
 
   const getMonthData = (data: Record<string, any>[], ym: string | undefined) => {
     if (!ym) return {};
@@ -459,10 +467,12 @@ export default function OverallKPI() {
   // MTD and LMTD from fm_raw (same-day snapshots — apples-to-apples comparison)
   const mtdLatest = getMonthData(fmByMonth, latestMtdMonth);
   const lmtdData = getMonthData(fmByMonth, lmtdMonth);
-  // Use mtd_raw for YoY (prior year full-month data — fm_raw 2025 rows are full-month uploads anyway)
-  const yoyData = getMonthData(mtdByMonth, yoyMonth);
   // Last FM from mtd_raw (full previous month)
   const fmLatest = getMonthData(mtdByMonth, latestFmMonth);
+  // YoY: Last FM (Jun 2026) vs same month last year (Jun 2025) — both from mtd_raw full-month
+  const yoyData = getMonthData(mtdByMonth, yoyMonth);
+  // For YoY display: numerator is Last FM (Jun 2026), denominator is Jun 2025
+  const yoyNumeratorData = fmLatest; // Last FM (Jun 2026 full month)
 
   // Data-as-of label from fm_raw snapshot dates (mtdDate added to getFmTrend)
   const asOfLabel = useMemo(() => {
@@ -569,7 +579,8 @@ export default function OverallKPI() {
                     lmtdValue={Number(lmtdData[field]) || 0}
                     fmValue={Number(fmLatest[field]) || 0}
                     yoyValue={yoyMonth && yoyData[field] ? Number(yoyData[field]) : undefined}
-                    yoyLabel={yoyMonth ? `${yoyMonth.slice(0,4)}-${yoyMonth.slice(4,6)} FM` : undefined}
+                    yoyNumerator={yoyNumeratorData[field] ? Number(yoyNumeratorData[field]) : undefined}
+                    yoyLabel={latestFmMonth && yoyMonth ? `${latestFmMonth.slice(0,4)}-${latestFmMonth.slice(4,6)} FM vs ${yoyMonth.slice(0,4)}-${yoyMonth.slice(4,6)}` : undefined}
                     unit={kpi.unit}
                     divisor={kpi.divisor}
                   />
@@ -591,7 +602,8 @@ export default function OverallKPI() {
                   mtdValue={Number(mtdLatest[field]) || 0}
                   lmtdValue={Number(lmtdData[field]) || 0}
                   yoyValue={yoyMonth && yoyData[field] ? Number(yoyData[field]) : undefined}
-                  yoyLabel={yoyMonth ? `${yoyMonth.slice(0,4)}-${yoyMonth.slice(4,6)} FM` : undefined}
+                  yoyNumerator={yoyNumeratorData[field] ? Number(yoyNumeratorData[field]) : undefined}
+                  yoyLabel={latestFmMonth && yoyMonth ? `${latestFmMonth.slice(0,4)}-${latestFmMonth.slice(4,6)} FM vs ${yoyMonth.slice(0,4)}-${yoyMonth.slice(4,6)}` : undefined}
                   divisor={kpi.divisor}
                   unit={kpi.unit}
                   isActive={activeKpi === field}
