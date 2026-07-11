@@ -42,6 +42,7 @@ function KpiCard({
   lmtdValue,
   fmValue,
   yoyValue,
+  yoyLabel,
   unit,
   divisor,
 }: {
@@ -50,6 +51,7 @@ function KpiCard({
   lmtdValue: number;
   fmValue: number;
   yoyValue?: number;
+  yoyLabel?: string;
   unit: string;
   divisor: number;
 }) {
@@ -99,7 +101,7 @@ function KpiCard({
             {yoyIsPos ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
             {formatPercent(yoyGrowth)}
           </span>
-          <span className="text-[10px] text-muted-foreground ml-auto">vs {fmt(yoyValue!)}</span>
+          <span className="text-[10px] text-muted-foreground ml-auto">vs {fmt(yoyValue!)}{yoyLabel ? ` (${yoyLabel})` : ""}</span>
         </div>
       )}
     </div>
@@ -161,6 +163,7 @@ function MiniKpiCard({
   mtdValue,
   lmtdValue,
   yoyValue,
+  yoyLabel,
   divisor,
   unit,
   isActive,
@@ -171,6 +174,7 @@ function MiniKpiCard({
   mtdValue: number;
   lmtdValue: number;
   yoyValue?: number;
+  yoyLabel?: string;
   divisor: number;
   unit: string;
   isActive: boolean;
@@ -440,7 +444,7 @@ export default function OverallKPI() {
   const latestMtdMonth = fmByMonth.length > 0 ? String(fmByMonth[fmByMonth.length - 1]?.yearMonth ?? "") : undefined;
   // LMTD = previous month in fm_raw (same day of previous month)
   const lmtdMonth = latestMtdMonth ? getLMTDMonth(latestMtdMonth) : undefined;
-  // YoY = same month last year in fm_raw
+  // YoY = same month last year from mtd_raw (full-month prior year, apples-to-apples vs projected)
   const yoyMonth = latestMtdMonth ? getYoYMonths(latestMtdMonth)[0] : undefined;
   // Last FM = previous full month from mtd_raw
   const latestFmMonth = mtdByMonth.length > 0
@@ -455,7 +459,8 @@ export default function OverallKPI() {
   // MTD and LMTD from fm_raw (same-day snapshots — apples-to-apples comparison)
   const mtdLatest = getMonthData(fmByMonth, latestMtdMonth);
   const lmtdData = getMonthData(fmByMonth, lmtdMonth);
-  const yoyData = getMonthData(fmByMonth, yoyMonth);
+  // Use mtd_raw for YoY (prior year full-month data — fm_raw 2025 rows are full-month uploads anyway)
+  const yoyData = getMonthData(mtdByMonth, yoyMonth);
   // Last FM from mtd_raw (full previous month)
   const fmLatest = getMonthData(mtdByMonth, latestFmMonth);
 
@@ -564,6 +569,7 @@ export default function OverallKPI() {
                     lmtdValue={Number(lmtdData[field]) || 0}
                     fmValue={Number(fmLatest[field]) || 0}
                     yoyValue={yoyMonth && yoyData[field] ? Number(yoyData[field]) : undefined}
+                    yoyLabel={yoyMonth ? `${yoyMonth.slice(0,4)}-${yoyMonth.slice(4,6)} FM` : undefined}
                     unit={kpi.unit}
                     divisor={kpi.divisor}
                   />
@@ -585,6 +591,7 @@ export default function OverallKPI() {
                   mtdValue={Number(mtdLatest[field]) || 0}
                   lmtdValue={Number(lmtdData[field]) || 0}
                   yoyValue={yoyMonth && yoyData[field] ? Number(yoyData[field]) : undefined}
+                  yoyLabel={yoyMonth ? `${yoyMonth.slice(0,4)}-${yoyMonth.slice(4,6)} FM` : undefined}
                   divisor={kpi.divisor}
                   unit={kpi.unit}
                   isActive={activeKpi === field}
