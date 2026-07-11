@@ -538,97 +538,109 @@ export default function VLRAnalysis() {
         </div>
       )}
 
-      {/* ─── Hotspot Map ──────────────────────────────────────────────────── */}
-      {!isLoading && activeTab === "map" && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-3 flex-wrap">
-            <span className="text-sm text-muted-foreground font-medium">Map Metric:</span>
-            {(["vlr", "growth", "gap"] as const).map((m) => (
-              <button
-                key={m}
-                onClick={() => setMapMetric(m)}
-                className={`px-3 py-1 rounded-full text-sm font-semibold transition-all ${
-                  mapMetric === m
-                    ? "bg-amber-500 text-black"
-                    : "bg-secondary text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {m === "vlr" ? "VLR Rate" : m === "growth" ? "MoM Growth" : "MTD vs LMTD Gap"}
-              </button>
-            ))}
-            <span className="text-sm text-muted-foreground ml-2">Brand:</span>
-            {(["IM3", "3ID", "IOH"] as const).map((b) => (
-              <button
-                key={b}
-                onClick={() => setMapBrand(b)}
-                className={`px-3 py-1 rounded-full text-sm font-semibold transition-all ${
-                  mapBrand === b
-                    ? b === "IM3" ? "bg-yellow-500 text-black" : b === "3ID" ? "bg-fuchsia-500 text-white" : "bg-blue-500 text-white"
-                    : "bg-secondary text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {b === "IOH" ? "IOH (Combined)" : b}
-              </button>
-            ))}
-          </div>
-
-          <div className="chart-container p-0 overflow-hidden" style={{ height: 560 }}>
-            <ChoroplethMap
-              data={mapData}
-              metric={mapMetric === "growth" ? "growth" : mapMetric === "gap" ? "gap" : "vlr"}
-              title={`Kecamatan VLR Hotspot — ${mapBrand}`}
-              className="h-full"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {["Top 5 VLR Growth", "Bottom 5 VLR Growth"].map((label) => {
-              const getBV = (r: any) => mapBrand === "IOH"
-                ? (Number(r.im3Gap ?? 0) + Number(r.threeidGap ?? 0))
-                : Number(r[`${mapBrand === "IM3" ? "im3" : "threeid"}Gap`] ?? 0);
-              const sorted = [...(kecRankQuery.data ?? [])].sort((a, b) => {
-                const ag = getBV(a as any);
-                const bg = getBV(b as any);
-                return label.includes("Top") ? bg - ag : ag - bg;
-              }).slice(0, 5);
-              return (
-                <div key={label} className="chart-container col-span-1 lg:col-span-2">
-                  <h4 className={`text-sm font-semibold mb-3 flex items-center gap-1 ${
-                    label.includes("Top") ? "value-positive" : "value-negative"
-                  }`}>
-                    {label.includes("Top") ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                    {label} — {mapBrand}
-                  </h4>
-                  <div className="space-y-2">
-                    {sorted.map((r, i) => {
-                      const gap = getBV(r as any);
-                      return (
-                        <div key={i} className="flex items-center justify-between text-sm">
-                          <span className="text-foreground font-medium truncate max-w-[140px]">{r.kecamatan}</span>
-                          <span className={`font-bold tabular-nums ${
-                            gap >= 0 ? "value-positive" : "value-negative"
-                          }`}>
-                            {gap >= 0 ? "+" : ""}{(gap / 1000).toFixed(2)}K
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* ─── SOGA/DMS Heatmap ───────────────────────────────────────────── */}
+      {/* ─── Hotspot Map (VLR Choropleth + SOGA/DMS Heatmap) ─────────────── */}
       {activeTab === "map" && (
-        <div className="space-y-4 mt-2">
-          {/* Section header */}
-          <div className="border-t border-border pt-4">
-            <h3 className="text-base font-bold text-foreground mb-1">SOGA &amp; DMS Weekly Trend — Kecamatan Heatmap</h3>
-            <p className="text-sm text-muted-foreground">Share % per kecamatan over last 5 weeks. Sorted by latest week value (descending).</p>
+        <div className="space-y-6">
+
+          {/* ── VLR Choropleth Map ── */}
+          <div className="space-y-4">
+            <div className="section-header">
+              <h3 className="text-sm font-bold text-foreground">VLR Hotspot Map</h3>
+            </div>
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="text-sm text-muted-foreground font-medium">Map Metric:</span>
+              {(["vlr", "growth", "gap"] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setMapMetric(m)}
+                  className={`px-3 py-1 rounded-full text-sm font-semibold transition-all ${
+                    mapMetric === m
+                      ? "bg-amber-500 text-black"
+                      : "bg-secondary text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {m === "vlr" ? "VLR Rate" : m === "growth" ? "MoM Growth" : "MTD vs LMTD Gap"}
+                </button>
+              ))}
+              <span className="text-sm text-muted-foreground ml-2">Brand:</span>
+              {(["IM3", "3ID", "IOH"] as const).map((b) => (
+                <button
+                  key={b}
+                  onClick={() => setMapBrand(b)}
+                  className={`px-3 py-1 rounded-full text-sm font-semibold transition-all ${
+                    mapBrand === b
+                      ? b === "IM3" ? "bg-yellow-500 text-black" : b === "3ID" ? "bg-fuchsia-500 text-white" : "bg-blue-500 text-white"
+                      : "bg-secondary text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {b === "IOH" ? "IOH (Combined)" : b}
+                </button>
+              ))}
+            </div>
+
+            {isLoading ? (
+              <div className="chart-container h-80 flex items-center justify-center">
+                <span className="text-sm text-muted-foreground animate-pulse">Loading map data...</span>
+              </div>
+            ) : (
+              <>
+                <div className="chart-container p-0 overflow-hidden" style={{ height: 560 }}>
+                  <ChoroplethMap
+                    data={mapData}
+                    metric={mapMetric === "growth" ? "growth" : mapMetric === "gap" ? "gap" : "vlr"}
+                    title={`Kecamatan VLR Hotspot — ${mapBrand}`}
+                    className="h-full"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  {["Top 5 VLR Growth", "Bottom 5 VLR Growth"].map((label) => {
+                    const getBV = (r: any) => mapBrand === "IOH"
+                      ? (Number(r.im3Gap ?? 0) + Number(r.threeidGap ?? 0))
+                      : Number(r[`${mapBrand === "IM3" ? "im3" : "threeid"}Gap`] ?? 0);
+                    const sorted = [...(kecRankQuery.data ?? [])].sort((a, b) => {
+                      const ag = getBV(a as any);
+                      const bg = getBV(b as any);
+                      return label.includes("Top") ? bg - ag : ag - bg;
+                    }).slice(0, 5);
+                    return (
+                      <div key={label} className="chart-container col-span-1 lg:col-span-2">
+                        <h4 className={`text-sm font-semibold mb-3 flex items-center gap-1 ${
+                          label.includes("Top") ? "value-positive" : "value-negative"
+                        }`}>
+                          {label.includes("Top") ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                          {label} — {mapBrand}
+                        </h4>
+                        <div className="space-y-2">
+                          {sorted.map((r, i) => {
+                            const gap = getBV(r as any);
+                            return (
+                              <div key={i} className="flex items-center justify-between text-sm">
+                                <span className="text-foreground font-medium truncate max-w-[140px]">{r.kecamatan}</span>
+                                <span className={`font-bold tabular-nums ${
+                                  gap >= 0 ? "value-positive" : "value-negative"
+                                }`}>
+                                  {gap >= 0 ? "+" : ""}{(gap / 1000).toFixed(2)}K
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
+
+          {/* ── SOGA/DMS Heatmap ── */}
+          <div className="space-y-4">
+            {/* Section header */}
+            <div className="border-t border-border pt-4">
+              <h3 className="text-base font-bold text-foreground mb-1">SOGA &amp; DMS Weekly Trend — Kecamatan Heatmap</h3>
+              <p className="text-sm text-muted-foreground">Share % per kecamatan over last 5 weeks. Sorted by latest week value (descending).</p>
+            </div>
 
           {/* Metric + Brand selectors */}
           <div className="flex items-center gap-4 flex-wrap">
@@ -757,6 +769,7 @@ export default function VLRAnalysis() {
               </div>
             );
           })()}
+          </div>
         </div>
       )}
 
