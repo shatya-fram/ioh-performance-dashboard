@@ -185,6 +185,19 @@ export const kecRank = mysqlTable("kec_rank", {
   area: varchar("area", { length: 64 }),
 });
 
+// ─── SOGA / DMS Weekly RAW ──────────────────────────────────────────────────
+export const sogaDmsWeekly = mysqlTable("soga_dms_weekly", {
+  id: int("id").autoincrement().primaryKey(),
+  kecamatanNm: varchar("kecamatan_nm", { length: 128 }).notNull(),
+  brand: varchar("brand", { length: 8 }).notNull(), // 'IM3' | '3ID'
+  metric: varchar("metric", { length: 8 }).notNull(), // 'SOGA' | 'DMS'
+  yearWeek: varchar("year_week", { length: 8 }).notNull(), // e.g. '202622'
+  value: double("value"),
+}, (t) => [
+  index("soga_dms_brand_metric_week").on(t.brand, t.metric, t.yearWeek),
+  index("soga_dms_kec").on(t.kecamatanNm),
+]);
+
 // ─── Product MTD RAW ─────────────────────────────────────────────────────────
 export const productMtdRaw = mysqlTable("product_mtd_raw", {
   id: int("id").autoincrement().primaryKey(),

@@ -20,6 +20,7 @@ import {
   getProductDimensions,
   getProductAnalysis,
   getProductDetail,
+  getSogaDmsWeekly,
   type ProductFilter,
 } from "./db";
 
@@ -157,6 +158,16 @@ export const appRouter = router({
       )
       .query(({ input }) => getProductDetail(input as ProductFilter)),
   }),
+  // ─── SOGA/DMS Weekly ─────────────────────────────────────────────────────
+  sogaDms: router({
+    weekly: publicProcedure
+      .input(
+        z.object({
+          brand: z.string().optional().nullable(),
+          metric: z.string().optional().nullable(),
+        })
+      )
+      .query(({ input }) => getSogaDmsWeekly(input.brand, input.metric)),
+  }),
 });
-
 export type AppRouter = typeof appRouter;

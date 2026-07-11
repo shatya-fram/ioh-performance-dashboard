@@ -12,6 +12,7 @@ import {
   kecRank,
   dataUploads,
   productMtdRaw,
+  sogaDmsWeekly,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -529,4 +530,26 @@ export async function getProductDetail(filter: ProductFilter) {
       productMtdRaw.yearMonth
     )
     .orderBy(desc(sql`SUM(rev)`));
+}
+
+// ─── SOGA/DMS Weekly ──────────────────────────────────────────────────────────
+export async function getSogaDmsWeekly(
+  brand?: string | null,
+  metric?: string | null
+) {
+  const db = await getDb();
+  if (!db) return [];
+  const conditions = [];
+  if (brand && brand !== "IOH") {
+    conditions.push(eq(sogaDmsWeekly.brand, brand));
+  }
+  if (metric) {
+    conditions.push(eq(sogaDmsWeekly.metric, metric));
+  }
+  const rows = await db
+    .select()
+    .from(sogaDmsWeekly)
+    .where(conditions.length ? and(...conditions) : undefined)
+    .orderBy(sogaDmsWeekly.kecamatanNm, sogaDmsWeekly.yearWeek);
+  return rows;
 }

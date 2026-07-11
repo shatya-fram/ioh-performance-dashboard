@@ -63,6 +63,14 @@ export default function VLRAnalysis() {
   const [kecSortField, setKecSortField] = useState<"vlrGap" | "vlrMtd" | "vlrGrowth" | "hvcGap" | "hvcMtd">("vlrGap");
   const [kecSortDir, setKecSortDir] = useState<"asc" | "desc">("asc"); // asc = worst gap first
 
+  // SOGA/DMS heatmap state
+  const [sogaMetric, setSogaMetric] = useState<"SOGA" | "DMS">("SOGA");
+  const [sogaBrand, setSogaBrand] = useState<"IM3" | "3ID" | "IOH">("IM3");
+
+  // SOGA/DMS weekly data (fetch both brands, filter client-side for IOH combined)
+  const sogaIm3Query = trpc.sogaDms.weekly.useQuery({ brand: "IM3", metric: sogaMetric });
+  const soga3idQuery = trpc.sogaDms.weekly.useQuery({ brand: "3ID", metric: sogaMetric });
+
   // VLR Tenure data
   const vlrQuery = trpc.vlr.trend.useQuery({
     brands: [tenureBrand],
@@ -225,6 +233,62 @@ export default function VLRAnalysis() {
   }, [kecRankQuery.data, mapBrand, mapMetric]);
 
   const isLoading = vlrQuery.isLoading || segmentsQuery.isLoading || kecRankQuery.isLoading;
+
+  // ─── SOGA/DMS heatmap data ────────────────────────────────────────────────
+  const sogaHeatmapData = useMemo(() => {
+    const im3Rows = sogaIm3Query.data ?? [];
+    const threeidRows = soga3idQuery.data ?? [];
+
+    // Build a map: kecamatanNm -> yearWeek -> value
+    const buildMap = (rows: typeof im3Rows) => {
+      const m = new Map<string, Map<string, number>>();
+      for (const r of rows) {
+        const kec = String(r.kecamatanNm ?? "").trim();
+        if (!kec) continue;
+        if (!m.has(kec)) m.set(kec, new Map());
+        m.get(kec)!.set(String(r.yearWeek), Number(r.value ?? 0));
+      }
+      return m;
+    };
+
+    const im3Map = buildMap(im3Rows);
+    const threeidMap = buildMap(threeidRows);
+
+    // Get all unique weeks (sorted)
+    const allWeeks = Array.from(
+      new Set([...im3Rows, ...threeidRows].map((r) => String(r.yearWeek)))
+    ).sort();
+
+    // Get all unique kecamatan
+    const allKec = Array.from(
+      new Set([...im3Rows, ...threeidRows].map((r) => String(r.kecamatanNm ?? "").trim()))
+    ).filter(Boolean);
+
+    // Build rows based on selected brand
+    const rows = allKec.map((kec) => {
+      const weekValues: Record<string, number> = {};
+      for (const w of allWeeks) {
+        if (sogaBrand === "IM3") {
+          weekValues[w] = im3Map.get(kec)?.get(w) ?? 0;
+        } else if (sogaBrand === "3ID") {
+          weekValues[w] = threeidMap.get(kec)?.get(w) ?? 0;
+        } else {
+          // IOH Combined = average of IM3 + 3ID
+          const v1 = im3Map.get(kec)?.get(w) ?? 0;
+          const v2 = threeidMap.get(kec)?.get(w) ?? 0;
+          weekValues[w] = (v1 + v2) / 2;
+        }
+      }
+      // Latest week value for sorting
+      const latestWeek = allWeeks[allWeeks.length - 1];
+      return { kec, weekValues, latestVal: weekValues[latestWeek] ?? 0 };
+    });
+
+    // Sort by latest week value descending
+    rows.sort((a, b) => b.latestVal - a.latestVal);
+
+    return { rows, weeks: allWeeks };
+  }, [sogaIm3Query.data, soga3idQuery.data, sogaBrand]);
 
   return (
     <div className="p-6 space-y-6 fade-in">
@@ -554,6 +618,145 @@ export default function VLRAnalysis() {
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* ─── SOGA/DMS Heatmap ───────────────────────────────────────────── */}
+      {activeTab === "map" && (
+        <div className="space-y-4 mt-2">
+          {/* Section header */}
+          <div className="border-t border-border pt-4">
+            <h3 className="text-base font-bold text-foreground mb-1">SOGA &amp; DMS Weekly Trend — Kecamatan Heatmap</h3>
+            <p className="text-sm text-muted-foreground">Share % per kecamatan over last 5 weeks. Sorted by latest week value (descending).</p>
+          </div>
+
+          {/* Metric + Brand selectors */}
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground font-medium">Metric:</span>
+              {(["SOGA", "DMS"] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setSogaMetric(m)}
+                  className={`px-3 py-1 rounded-full text-sm font-semibold transition-all ${
+                    sogaMetric === m
+                      ? "bg-emerald-500 text-white"
+                      : "bg-secondary text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground font-medium">Brand:</span>
+              {(["IM3", "3ID", "IOH"] as const).map((b) => (
+                <button
+                  key={b}
+                  onClick={() => setSogaBrand(b)}
+                  className={`px-3 py-1 rounded-full text-sm font-semibold transition-all ${
+                    sogaBrand === b
+                      ? b === "IM3" ? "bg-yellow-500 text-black" : b === "3ID" ? "bg-fuchsia-500 text-white" : "bg-blue-500 text-white"
+                      : "bg-secondary text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {b === "IOH" ? "IOH (Combined)" : b}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Loading state */}
+          {(sogaIm3Query.isLoading || soga3idQuery.isLoading) && (
+            <div className="chart-container h-40 flex items-center justify-center">
+              <span className="text-sm text-muted-foreground animate-pulse">Loading {sogaMetric} data...</span>
+            </div>
+          )}
+
+          {/* Heatmap table */}
+          {!sogaIm3Query.isLoading && !soga3idQuery.isLoading && (() => {
+            const { rows, weeks } = sogaHeatmapData;
+            if (!rows.length) return (
+              <div className="chart-container h-24 flex items-center justify-center">
+                <span className="text-sm text-muted-foreground">No {sogaMetric} data available.</span>
+              </div>
+            );
+
+            // Color scale: 0% = red, 50% = amber, 100% = green
+            const getColor = (val: number) => {
+              const v = Math.max(0, Math.min(100, val));
+              if (v >= 60) return { bg: `rgba(34,197,94,${0.3 + (v - 60) / 40 * 0.6})`, text: v > 80 ? "#fff" : "#166534" };
+              if (v >= 40) return { bg: `rgba(234,179,8,${0.3 + (v - 40) / 20 * 0.4})`, text: "#713f12" };
+              return { bg: `rgba(239,68,68,${0.3 + (40 - v) / 40 * 0.6})`, text: v < 20 ? "#fff" : "#7f1d1d" };
+            };
+
+            // Format week label: 202622 -> W22
+            const weekLabel = (w: string) => `W${w.slice(4)}`;
+
+            return (
+              <div className="chart-container p-0 overflow-hidden">
+                <div className="overflow-auto" style={{ maxHeight: 520 }}>
+                  <table className="w-full text-sm border-collapse">
+                    <thead className="sticky top-0 z-10 bg-secondary">
+                      <tr>
+                        <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground border-b border-border sticky left-0 bg-secondary min-w-[160px]">
+                          Kecamatan
+                        </th>
+                        {weeks.map((w) => (
+                          <th key={w} className="text-center py-2 px-2 text-xs font-semibold text-muted-foreground border-b border-border min-w-[72px]">
+                            {weekLabel(w)}
+                          </th>
+                        ))}
+                        <th className="text-center py-2 px-2 text-xs font-semibold text-muted-foreground border-b border-border min-w-[72px]">
+                          Trend
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map(({ kec, weekValues }, idx) => {
+                        const vals = weeks.map((w) => weekValues[w] ?? 0);
+                        const first = vals[0] ?? 0;
+                        const last = vals[vals.length - 1] ?? 0;
+                        const trendDiff = last - first;
+                        return (
+                          <tr key={kec} className={idx % 2 === 0 ? "bg-background" : "bg-secondary/30"}>
+                            <td className="py-1.5 px-3 text-xs font-medium text-foreground border-b border-border/30 sticky left-0 bg-inherit truncate max-w-[160px]">
+                              {kec}
+                            </td>
+                            {weeks.map((w) => {
+                              const val = weekValues[w] ?? 0;
+                              const { bg, text } = getColor(val);
+                              return (
+                                <td
+                                  key={w}
+                                  className="py-1.5 px-1 text-center text-xs font-semibold tabular-nums border-b border-border/30"
+                                  style={{ background: bg, color: text }}
+                                >
+                                  {val.toFixed(2)}%
+                                </td>
+                              );
+                            })}
+                            <td className={`py-1.5 px-2 text-center text-xs font-bold tabular-nums border-b border-border/30 ${
+                              trendDiff > 0 ? "value-positive" : trendDiff < 0 ? "value-negative" : "text-muted-foreground"
+                            }`}>
+                              {trendDiff > 0 ? "↗ +" : trendDiff < 0 ? "↘ " : "→ "}{Math.abs(trendDiff).toFixed(2)}pp
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="px-3 py-2 text-xs text-muted-foreground border-t border-border flex items-center gap-4">
+                  <span>Color scale:</span>
+                  <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded" style={{background:"rgba(239,68,68,0.7)"}}></span> &lt;40% (Low)</span>
+                  <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded" style={{background:"rgba(234,179,8,0.7)"}}></span> 40–60% (Mid)</span>
+                  <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded" style={{background:"rgba(34,197,94,0.7)"}}></span> &gt;60% (High)</span>
+                  <span className="ml-auto">{rows.length} kecamatan · {weeks.length} weeks · IOH Combined = avg(IM3, 3ID)</span>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 
