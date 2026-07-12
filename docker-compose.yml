@@ -1,0 +1,88 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# IOH Performance Dashboard
+# This stack connects to the shared "proxy_network" managed by nginx-proxy.
+# The app is NOT exposed directly on any host port — Nginx proxies to it.
+#
+# Prerequisites:
+#   1. nginx-proxy stack must be running first (creates proxy_network)
+#   2. Copy deploy/env.template to .env and fill in values
+#   3. Run: docker compose up -d --build
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  # ─── MySQL Database ──────────────────────────────────────────────────────────
+  db:
+    image: mysql:8.0
+    container_name: ioh_db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-ioh_dashboard}
+      MYSQL_USER: ${MYSQL_USER:-ioh_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - ioh_db_data:/var/lib/mysql
+    # DB is NOT on proxy_network — only the app can reach it via ioh_internal
+    networks:
+      - ioh_internal
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ─── App (Node.js) ───────────────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ioh_dashboard_app:latest
+    container_name: ioh_app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: mysql://${MYSQL_USER:-ioh_user}:${MYSQL_PASSWORD}@db:3306/${MYSQL_DATABASE:-ioh_dashboard}
+      JWT_SECRET: ${JWT_SECRET}
+      VITE_APP_ID: ${VITE_APP_ID}
+      OAUTH_SERVER_URL: ${OAUTH_SERVER_URL:-https://api.manus.im}
+      VITE_OAUTH_PORTAL_URL: ${VITE_OAUTH_PORTAL_URL:-https://manus.im}
+      OWNER_OPEN_ID: ${OWNER_OPEN_ID}
+      OWNER_NAME: ${OWNER_NAME}
+      BUILT_IN_FORGE_API_URL: ${BUILT_IN_FORGE_API_URL:-https://api.manus.im}
+      BUILT_IN_FORGE_API_KEY: ${BUILT_IN_FORGE_API_KEY}
+      VITE_FRONTEND_FORGE_API_KEY: ${VITE_FRONTEND_FORGE_API_KEY}
+      VITE_FRONTEND_FORGE_API_URL: ${VITE_FRONTEND_FORGE_API_URL:-https://api.manus.im}
+    # Connected to BOTH networks:
+    #   - ioh_internal: to reach the DB
+    #   - proxy_network: so Nginx can proxy to it
+    networks:
+      - ioh_internal
+      - proxy_network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  ioh_db_data:
+    name: ioh_db_data
+
+networks:
+  # Internal network: only app ↔ db
+  ioh_internal:
+    name: ioh_internal
+    driver: bridge
+
+  # External shared proxy network (created by nginx-proxy stack)
+  proxy_network:
+    name: proxy_network
+    external: true
