@@ -1,0 +1,63 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# IOH Performance Dashboard — LOCAL DEVELOPMENT / LOCALHOST
+# Runs the full stack (app + MySQL) directly on localhost:3000
+# No Nginx needed — access at http://localhost:3000
+#
+# Usage:
+#   cp deploy/env.template .env.local   # then fill in values
+#   docker compose -f docker-compose.local.yml --env-file .env.local up -d --build
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: ioh_db_local
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-localroot123}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-ioh_dashboard}
+      MYSQL_USER: ${MYSQL_USER:-ioh_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-localpass123}
+    volumes:
+      - ioh_db_local_data:/var/lib/mysql
+    ports:
+      - "3306:3306"     # expose DB port for local tools (TablePlus, DBeaver, etc.)
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-localroot123}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ioh_dashboard_app:local
+    container_name: ioh_app_local
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: mysql://${MYSQL_USER:-ioh_user}:${MYSQL_PASSWORD:-localpass123}@db:3306/${MYSQL_DATABASE:-ioh_dashboard}
+      JWT_SECRET: ${JWT_SECRET:-local_dev_jwt_secret_change_in_prod}
+      VITE_APP_ID: ${VITE_APP_ID:-local}
+      OAUTH_SERVER_URL: ${OAUTH_SERVER_URL:-https://api.manus.im}
+      VITE_OAUTH_PORTAL_URL: ${VITE_OAUTH_PORTAL_URL:-https://manus.im}
+      OWNER_OPEN_ID: ${OWNER_OPEN_ID:-}
+      OWNER_NAME: ${OWNER_NAME:-Local User}
+      BUILT_IN_FORGE_API_URL: ${BUILT_IN_FORGE_API_URL:-https://api.manus.im}
+      BUILT_IN_FORGE_API_KEY: ${BUILT_IN_FORGE_API_KEY:-}
+      VITE_FRONTEND_FORGE_API_KEY: ${VITE_FRONTEND_FORGE_API_KEY:-}
+      VITE_FRONTEND_FORGE_API_URL: ${VITE_FRONTEND_FORGE_API_URL:-https://api.manus.im}
+    ports:
+      - "3000:3000"     # access at http://localhost:3000
+
+volumes:
+  ioh_db_local_data:
+    name: ioh_db_local_data
