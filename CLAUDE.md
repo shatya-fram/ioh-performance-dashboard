@@ -312,18 +312,69 @@ bash scripts/setup_local.sh        # Mac/Linux
 # Opens http://localhost:3000
 ```
 
-### Hetzner Production (dashboard.gamextopia.id)
-```bash
-# On Hetzner server as root:
-bash deploy/deploy_hetzner.sh
-```
+### Hetzner Production Checklist (dashboard.gamextopia.id)
+
+This reconciles two things that existed but didn't quite line up: `deploy/deploy_hetzner.sh`
+(fully automated, host-level Nginx + Certbot) assumes the app is reachable at
+`localhost:3000` on the host, but `docker-compose.yml` never actually published that
+port — so a "successful" run of the script would still 502 (connection refused) until
+`docker-compose.yml` was fixed to add `ports: ["127.0.0.1:3000:3000"]`. Follow this
+list in order; each step names the file/command that does it.
+
+- [ ] **Auth decision made before this is internet-reachable.** The only auth wired up
+  (`server/_core/oauth.ts`) is Manus OAuth — it calls out to `https://api.manus.im` and
+  needs a real `VITE_APP_ID` + `OWNER_OPEN_ID` from a Manus app registration. Confirm
+  whether those credentials already exist:
+  - If yes: fill them into `.env` in the steps below, Manus login works as-is.
+  - If no: either obtain them from Manus first, or swap in a simpler auth method
+    (e.g. a single shared password gate, or a real username/password table) before
+    exposing this to the internet — do not deploy with placeholder OAuth values and
+    no fallback, since that leaves the app either unauthenticated or unreachable.
+- [ ] **Hetzner server provisioned** — a VPS with root/sudo SSH access, public IP noted.
+- [ ] **DNS A record** for `dashboard.gamextopia.id` → the server's public IP (propagation
+  can take a few minutes to hours; `deploy_hetzner.sh` pauses and waits for you to
+  confirm this before requesting the SSL cert).
+- [ ] **`docker-compose.yml` has the port fix** (already applied in this working copy —
+  confirm it's committed/pushed before deploying: `app.ports: ["127.0.0.1:3000:3000"]`).
+- [ ] **Push this repo's current state to GitHub** (`git push origin main`) — the deploy
+  script clones/pulls from `https://github.com/shatya-fram/ioh-performance-dashboard.git`,
+  so anything not pushed will not be on the server.
+- [ ] **Run the deploy script on the server, as root:**
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/shatya-fram/ioh-performance-dashboard/main/deploy/deploy_hetzner.sh | bash
+  ```
+  This installs Docker + Certbot, clones to `/opt/ioh-dashboard`, generates `.env` with
+  random DB/JWT secrets (Manus OAuth vars are left as placeholders), starts
+  `docker compose up -d --build`, configures host Nginx for the domain, and requests
+  a Let's Encrypt certificate.
+- [ ] **Fill in Manus OAuth values** (if using Manus auth): `nano /opt/ioh-dashboard/.env`,
+  set `VITE_APP_ID` / `OWNER_OPEN_ID` / `OWNER_NAME`, then
+  `docker compose -f /opt/ioh-dashboard/docker-compose.yml up -d --build app` to pick
+  up the new env vars.
+- [ ] **Verify:** `python3 scripts/health_check.py --url https://dashboard.gamextopia.id`,
+  then log in and confirm the Data Upload page can actually ingest a workbook (this
+  exercises DB connectivity end-to-end, not just the health endpoint).
+- [ ] **Confirm restart behavior** — both `db` and `app` are `restart: unless-stopped`,
+  so a server reboot should bring the stack back without manual intervention; verify
+  this once (`reboot`, wait, recheck the URL) rather than assuming it.
+
+### Note on the two Nginx approaches in this repo
+`deploy/deploy_hetzner.sh` sets up Nginx **directly on the host** (via `apt install nginx`)
+and points it at `localhost:3000` — this is the one the checklist above uses, and it's
+correct for a single-project server. `deploy/nginx/conf.d/app.conf` + the `proxy_network`
+references in `docker-compose.yml`, by contrast, describe a **different, container-based**
+Nginx pattern meant for a server hosting *multiple* projects behind one shared
+`nginx-proxy` container — that path needs the shared proxy stack stood up first and is
+not what `deploy_hetzner.sh` does. Don't mix the two; pick one based on whether this
+server will host only this app or several.
 
 ### Environment Variables
 Copy `deploy/env.template` to `.env` and fill in:
 - `DATABASE_URL` — MySQL connection string
 - `JWT_SECRET` — 32+ char random string
 - `MYSQL_ROOT_PASSWORD`, `MYSQL_PASSWORD` — DB passwords
-- `VITE_APP_ID`, `OWNER_OPEN_ID` — Manus OAuth credentials
+- `VITE_APP_ID`, `OWNER_OPEN_ID` — Manus OAuth credentials (see the auth decision above —
+  required for login to function at all, since there is no non-OAuth login path today)
 
 ---
 

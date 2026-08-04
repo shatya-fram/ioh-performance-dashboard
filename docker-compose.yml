@@ -59,6 +59,13 @@ services:
       BUILT_IN_FORGE_API_KEY: ${BUILT_IN_FORGE_API_KEY}
       VITE_FRONTEND_FORGE_API_KEY: ${VITE_FRONTEND_FORGE_API_KEY}
       VITE_FRONTEND_FORGE_API_URL: ${VITE_FRONTEND_FORGE_API_URL:-https://api.manus.im}
+    # Bound to localhost only: deploy/deploy_hetzner.sh's host-level Nginx proxies
+    # to http://localhost:3000, but nothing previously published this port to the
+    # host at all, so that Nginx config would 502 with connection-refused even on
+    # an otherwise-successful deploy. Not published on all interfaces since the
+    # public-facing surface should be Nginx (80/443) with TLS, not this directly.
+    ports:
+      - "127.0.0.1:3000:3000"
     # Connected to BOTH networks:
     #   - ioh_internal: to reach the DB
     #   - proxy_network: so Nginx can proxy to it
